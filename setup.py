@@ -1,6 +1,6 @@
 import os
 
-import versioneer
+#import versioneer
 from setuptools import setup
 
 
@@ -18,8 +18,8 @@ with open("README.md") as f:
 
 setup(
     name="postgresql_wheel",
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    version='v', #versioneer.get_version(),
+    cmdclass='not sure', #versioneer.get_cmdclass(),
     description="PostgreSQL Server compiled into a Python Wheel.",
     long_description=long_description,
     long_description_content_type="text/markdown",
