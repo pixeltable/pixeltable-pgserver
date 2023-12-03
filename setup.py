@@ -25,7 +25,7 @@ setup(
     setup_requires=["cffi"],
     install_requires=["pytest"],
     cffi_modules=["src/postgresql/build.py:ffibuilder"],
-    python_requires=">=3.8",
+    # python_requires=">=3.8",
     license="Apache License 2.0",
     keywords=[
         "graphblas",
