@@ -18,8 +18,8 @@ with open("README.md") as f:
 
 setup(
     name="postgresql_wheel",
-    version='v', #versioneer.get_version(),
-    cmdclass='not sure', #versioneer.get_cmdclass(),
+    version='0.1', #versioneer.get_version(),
+    # cmdclass='not sure', #versioneer.get_cmdclass(),
     description="PostgreSQL Server compiled into a Python Wheel.",
     long_description=long_description,
     long_description_content_type="text/markdown",
