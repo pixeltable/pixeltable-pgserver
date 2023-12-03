@@ -14,8 +14,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
-            arch: arm64
+          # - os: macos-latest
+          #   arch: arm64
           - os: ubuntu-latest
             arch: x86_64
     steps:
