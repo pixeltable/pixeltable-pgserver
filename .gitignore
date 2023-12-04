@@ -128,3 +128,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+postgresql-*
+src/postgresql/bin
+src/postgresql/include
+src/postgresql/share
+

@@ -19,9 +19,9 @@ with open("README.md") as f:
 setup(
     url="https://github.com/michelp/postgresql-wheel",
     author="Michel Pelletier",
-    packages=["postgresql"],
-    package_dir={"postgresql": "src/postgresql"},
-    package_data={"postgresql": package_files("src/postgresql")},
+    # packages=["postgresql"],
+    # package_dir={"postgresql": "src/postgresql"},
+    # package_data={"postgresql": package_files("src/postgresql")},
     setup_requires=["cffi"],
     install_requires=["pytest"],
     cffi_modules=["src/postgresql/build.py:ffibuilder"],
