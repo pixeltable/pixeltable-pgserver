@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-PREFIX := $(shell pwd)/src/postgresql/prefix/
+PREFIX := $(shell pwd)/../pginstall/
 
 .PHONY: all
 all: pgvector postgres
@@ -23,7 +23,7 @@ $(PREFIX):
 #for explanation of unsetting make env variables prior to calling postgres' own make
 $(PREFIX)/bin/postgres: $(POSTGRES_DIR) $(PREFIX)
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
-		&& ./configure --prefix=$(PREFIX) \
+		&& ./configure --prefix=$(PREFIX) --without-readline \
 		&& make -j \
 		&& make install
 
