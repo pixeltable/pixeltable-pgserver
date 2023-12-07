@@ -5,3 +5,4 @@ all:
 clean:
 	rm -rf build
 	rm -rf src/postgresql/{pgbuild,pginstall}
+	rm -rf wheelhouse/
