@@ -3,8 +3,11 @@ name = "postgresql_wheel" # Required
 version = "0.0.1"  # Required
 description = "A sample Python project" 
 readme = "README.md" # Optional
-requires-python = "~=3.8"
+requires-python = ">=3.8"
 license = {file = "LICENSE.txt"}
+urls={repository="https://github.com/orm011/postgresql-wheel"}
+authors=[{ name="Oscar Moll", email="orm@csail.mit.edu" }]
+keywords=["postgresql", "pgvector"]
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
