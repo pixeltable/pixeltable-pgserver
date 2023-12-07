@@ -7,8 +7,7 @@ from tempfile import TemporaryDirectory
 from time import sleep
 import pytest
 
-pg_bin = Path(__file__).parent / "bin"
-
+pg_bin = Path(__file__).parent / "prefix" / "bin"
 
 def prog(name):
     def f(cmdline):
