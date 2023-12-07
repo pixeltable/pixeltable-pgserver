@@ -1,2 +1,2 @@
-graft src/postgresql/prefix
-prune src/postgresql/prefix/include
+graft src/postgresql/pginstall
+prune src/postgresql/pginstall/include
