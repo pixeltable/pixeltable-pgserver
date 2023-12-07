@@ -7,7 +7,6 @@ setup(
     url="https://github.com/orm011/postgresql-wheel",
     author="Oscar Moll",
     setup_requires=["cffi"],
-    install_requires=["pytest"],
     cffi_modules=["src/postgresql/build.py:ffibuilder"],
     license="Apache License 2.0",
     keywords=[

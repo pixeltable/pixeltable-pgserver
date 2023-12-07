@@ -1,20 +1,15 @@
 [project]
 name = "postgresql_wheel" # Required
-version = "3.0.0"  # Required
+version = "0.0.1"  # Required
 description = "A sample Python project" 
 readme = "README.md" # Optional
 requires-python = "~=3.8"
 license = {file = "LICENSE.txt"}
 
-[tool.setuptools]
-# If there are data files included in your packages that need to be
-# installed, specify them here.
-# package-data = {"src/postgresql/bin/*" = ["*"]}
-
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
-# include = ["postgresql*"]  # package names should match these glob patterns (["*"] by default)
-# exclude = ["postgresql.tests*", "postgresql.share*",]  # exclude packages matching these glob patterns (empty by default)
+include = ["postgresql*"]  # package names should match these glob patterns (["*"] by default)
+exclude = ["postgresql.tests*"]
 
 [build-system]
 # These are the assumed default build requirements from pip:

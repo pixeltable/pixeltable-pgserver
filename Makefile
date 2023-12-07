@@ -1,3 +1,7 @@
 .PHONY: all
 all:
-	cd src/postgresql && makedir -p pgbuild && make -C pgbuild all
+	cd src/postgresql && mkdir -p pgbuild && make -C pgbuild -f ../Makefile
+
+clean:
+	rm -rf build
+	rm -rf src/postgresql/{pgbuild,pginstall}
