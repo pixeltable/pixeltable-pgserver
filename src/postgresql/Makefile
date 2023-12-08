@@ -23,7 +23,7 @@ $(PREFIX):
 #for explanation of unsetting make env variables prior to calling postgres' own make
 $(PREFIX)/bin/postgres: $(POSTGRES_DIR) $(PREFIX)
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
-		&& ./configure --prefix=$(PREFIX) --without-readline \
+		&& ./configure --prefix=$(PREFIX) --without-readline --host=$(HOST_ARCH) \
 		&& make -j \
 		&& make install
 
