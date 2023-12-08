@@ -12,9 +12,6 @@ def _prog(name):
         stdout = subprocess.check_output(cmdline, shell=True)
         return stdout.decode("utf-8")
 
-    ## get from executing cmd --help as docstring
-    output = subprocess.check_output(f"{command} --help", shell=True)
-    f.__doc__ = output.decode("utf-8")
     return f
 
 

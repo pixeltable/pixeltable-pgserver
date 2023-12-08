@@ -14,8 +14,17 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest-xlarge
+          # using macos-latest-xlarge for arm64 apple build:
+          # macos-latest can cross compile for arm64, even though it is a x86_64 system
+          # (see pyav build workflow)
+          # however the build code for pg extensions themselves can depend on some generated binaries
+          # (like pg_config), which would have been cross-compiled and cannot run on the host
+          # to keep things simple just build on the -xlarge instance, which is arm64.exclude:
+          # ubuntu arm64 may have similar issues (but useful for newer aws machines)
+          - os: macos-latest-xlarge  
             arch: arm64
+          - os: macos-latest
+            arch: x86_64
           - os: ubuntu-latest
             arch: x86_64
     steps:
@@ -30,17 +39,23 @@ jobs:
       - name: Build wheels
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
-          CIBW_SKIP: pp*  *-musllinux*
+          CIBW_SKIP: pp* *-musllinux*
           CIBW_BEFORE_ALL: "make"
         run: python -m cibuildwheel --output-dir wheelhouse
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
-      # - uses: actions/download-artifact@v2
-      #   with:
-      #     name: artifact
-      #     path: dist
-      # - uses: pypa/gh-action-pypi-publish@v1.4.2
-      #   with:
-      #     user: __token__
-      #     password: ${{ secrets.PYPI_TOKEN }}
+
+  publish:
+    name: Publish to PyPI
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@v1.4.2
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_TOKEN }}

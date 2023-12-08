@@ -1,14 +1,14 @@
-import postgresql
-from postgresql.testing import pg_setup, pg_teardown, tmp_postgres
+import pytest
+from postgresql import TemporaryPostgres
 
-def test_setup_teardown():
-    pgdata, conn = pg_setup()
-    pg_teardown(pgdata)
+@pytest.fixture
+def tmp_postgres():
+    with TemporaryPostgres() as pg:
+        yield pg
 
 def test_fixture(tmp_postgres):
-    pgdata, con_str = tmp_postgres
-    postgresql.psql(f'-d "{con_str}" -c "select version()"')
+    tmp_postgres.run_psql_command("select version();")
 
-def test_pgvector_extension(tmp_postgres):
-    pgdata, con_str = tmp_postgres
-    postgresql.psql(f'-d "{con_str}" -c "CREATE EXTENSION vector;"')
+def test_pgvector(tmp_postgres):
+    ret = tmp_postgres.run_psql_command("CREATE EXTENSION vector;")
+    assert ret == "CREATE EXTENSION\n"
