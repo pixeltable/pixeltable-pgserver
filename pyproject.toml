@@ -8,6 +8,9 @@ license = {file = "LICENSE.txt"}
 urls={repository="https://github.com/orm011/postgresql-wheel"}
 authors=[{ name="Oscar Moll", email="orm@csail.mit.edu" }]
 keywords=["postgresql", "pgvector"]
+dependencies = [
+    "fasteners>=0.19"
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)

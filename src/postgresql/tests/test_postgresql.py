@@ -1,9 +1,9 @@
 import pytest
-from postgresql import TemporaryPostgres
+from postgresql import PostgresServer
 
 @pytest.fixture
 def tmp_postgres():
-    with TemporaryPostgres() as pg:
+    with PostgresServer.get_temporary() as pg:
         yield pg
 
 def test_fixture(tmp_postgres):

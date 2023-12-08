@@ -36,7 +36,7 @@ class PostgresServer(abc.ABC):
 
     @abc.abstractmethod
     def _shutdown(self) -> None:
-        """ Cleans up  """
+        """ Cleans up. Must be idempotent."""
         pass
 
     def get_connection_uri(self, database : Optional[str] = None) -> str:
@@ -142,7 +142,7 @@ class SharedPostgres(PostgresServer):
         with self.lock:
             # lock will create the directory if it doesn't exist
             # so we need to check specifically for some pgdata files
-            self._add_pid()
+            self._add_self_pid()
 
             if not (self.pgdata / 'PG_VERSION').exists():
                 initdb(f"-D {self.pgdata} --auth=trust --auth-local=trust -U {self.user}")
@@ -154,11 +154,21 @@ class SharedPostgres(PostgresServer):
             except CalledProcessError:
                 pass
 
-            if not started:
+            if not started:            
                 pg_ctl(f'-D {self.pgdata} -w -o "-k {self.socket_dir} -h \\"\\"" -l {self.log} start')
 
+            self.get_status() # check that server is running
 
-    def _add_pid(self) -> None:
+    def _shutdown(self) -> None:
+        with self.lock:
+            pids = self._remove_self_pid()
+            if len(pids) == 0: # last process using the database
+                try:
+                    pg_ctl(f"-D {self.pgdata} stop")
+                except CalledProcessError:
+                    pass # in case the server was already stopped
+
+    def _add_self_pid(self) -> None:
         if not self.refcount.exists():
             pids = [os.getpid()]
         else:
@@ -168,7 +178,7 @@ class SharedPostgres(PostgresServer):
         pids.append(os.getpid())
         self.refcount.write_text(json.dumps(pids))
 
-    def _remove_pid(self) -> list[int]:
+    def _remove_self_pid(self) -> list[int]:
         pids = json.loads(self.refcount.read_text())
         if os.getpid() not in pids:
             # already removed, eg by repeated calls to teardown()
@@ -178,11 +188,7 @@ class SharedPostgres(PostgresServer):
         self.refcount.write_text(json.dumps(pids))
         return pids
     
-    def _teardown(self) -> None:
-        with self.lock:
-            pids = self._remove_pid()
-            if len(pids) == 0: # last process using the database
-                pg_ctl(f"-D {self.pgdata} stop")
+
         
 
 
