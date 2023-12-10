@@ -9,13 +9,16 @@ urls={repository="https://github.com/orm011/postgresql-wheel"}
 authors=[{ name="Oscar Moll", email="orm@csail.mit.edu" }]
 keywords=["postgresql", "pgvector"]
 dependencies = [
-    "fasteners>=0.19"
+    "fasteners>=0.19",
+    "platformdirs>=4.0.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
 include = ["postgresql*"]  # package names should match these glob patterns (["*"] by default)
-exclude = ["postgresql.tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/postgresql/tests"]
 
 [build-system]
 # These are the assumed default build requirements from pip:
