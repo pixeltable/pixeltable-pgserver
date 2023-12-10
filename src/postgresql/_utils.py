@@ -134,7 +134,8 @@ class PostgresServer:
     def psql(self, command : str) -> str:
         """ Runs a psql command on this server. The command is passed to psql via stdin.
         """
-        stdout = subprocess.check_output(f'{self.get_executable_path() / 'psql'} {self.get_uri()}', 
+        executable = self.get_executable_path() / 'psql'
+        stdout = subprocess.check_output(f'{executable} {self.get_uri()}',
                                          input=command.encode(), shell=True)
         return stdout.decode("utf-8")
 
