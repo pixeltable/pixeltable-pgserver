@@ -1,7 +1,7 @@
 [project]
-name = "postgresql_wheel" # Required
+name = "pgserver" # Required
 version = "0.0.1"  # Required
-description = "A sample Python project" 
+description = "Postgres server with pgvector extension" # Required
 readme = "README.md" # Optional
 requires-python = ">=3.8"
 license = {file = "LICENSE.txt"}
@@ -19,6 +19,12 @@ include = ["postgresql*"]  # package names should match these glob patterns (["*
 
 [tool.pytest.ini_options]
 testpaths = ["src/postgresql/tests"]
+
+[tool.cibuildwheel]
+before-all = "make"
+test-requires = "pytest"
+test-command = "pytest --pyargs postgresql"
+
 
 [build-system]
 # These are the assumed default build requirements from pip:

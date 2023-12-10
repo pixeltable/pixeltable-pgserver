@@ -40,7 +40,6 @@ jobs:
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
           CIBW_SKIP: pp* *-musllinux*
-          CIBW_BEFORE_ALL: "make"
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v3
         with:
