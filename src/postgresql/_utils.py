@@ -1,6 +1,6 @@
 from pathlib import Path
 from ._commands import initdb, pg_ctl, pg_bin
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 import shutil
 import atexit
 import subprocess
@@ -18,7 +18,7 @@ class DiskList:
     def __init__(self, path : Path):
         self.path = path
 
-    def get_and_add(self, value : int) -> list[int]:
+    def get_and_add(self, value : int) -> List[int]:
         old_values = self.get()
         values = old_values.copy()
         if value not in values:
@@ -26,7 +26,7 @@ class DiskList:
             self.put(values)
         return old_values
         
-    def get_and_remove(self, value : int) -> list[int]:
+    def get_and_remove(self, value : int) -> List[int]:
         old_values = self.get()
         values = old_values.copy()
         if value in values:
@@ -34,12 +34,12 @@ class DiskList:
             self.put(values)
         return old_values
     
-    def get(self) -> list[int]:
+    def get(self) -> List[int]:
         if not self.path.exists():
             return []
         return json.loads(self.path.read_text())
     
-    def put(self, values : list[int]) -> None:
+    def put(self, values : List[int]) -> None:
         self.path.write_text(json.dumps(values))
 
 
