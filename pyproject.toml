@@ -23,7 +23,8 @@ testpaths = ["tests"]
 [tool.cibuildwheel]
 before-all = "make"
 test-requires = "pytest"
-test-command = "python -m pytest ./tests"
+# cibw-skip = "pp* *-musllinux* pp** cp39-* cp310-* cp311-* cp312-*"
+test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 
 [build-system]
