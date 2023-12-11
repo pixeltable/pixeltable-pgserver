@@ -1,5 +1,5 @@
 import pytest
-from postgresql import PostgresServer
+from pgserver import PostgresServer
 import subprocess
 import tempfile
 import multiprocessing as mp
@@ -57,8 +57,8 @@ def test_reentrant():
             _kill_server(pid)
 
 def _start_and_wait(tmpdir, queue_in, queue_out):
-    import postgresql
-    with postgresql.PostgresServer.get_server(tmpdir) as pg:
+    import pgserver
+    with pgserver.PostgresServer.get_server(tmpdir) as pg:
         pid = _check_server_works(pg)
         queue_out.put(pid)
 

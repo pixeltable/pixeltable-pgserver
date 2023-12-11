@@ -1,5 +1,6 @@
 SHELL := /bin/bash
-PREFIX := $(shell pwd)/../pginstall/
+PREFIX := $(shell pwd)/src/pgserver/pginstall/
+BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
 all: pgvector postgres
@@ -24,15 +25,15 @@ $(PREFIX):
 $(PREFIX)/bin/postgres: $(POSTGRES_DIR) $(PREFIX)
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
 		&& ./configure --prefix=$(PREFIX) --without-readline \
-		&& make -j \
-		&& make install
+		&& $(MAKE) -j \
+		&& $(MAKE) install
 
 .PHONY: postgres
 postgres: $(PREFIX)/bin/postgres
 
 ### pgvector
 PGVECTOR_TAG := v0.5.1
-PGVECTOR_URL:= https://github.com/pgvector/pgvector/archive/refs/tags/$(PGVECTOR_TAG).tar.gz
+PGVECTOR_URL := https://github.com/pgvector/pgvector/archive/refs/tags/$(PGVECTOR_TAG).tar.gz
 PGVECTOR_DIR := pgvector-$(PGVECTOR_TAG)
 
 $(PGVECTOR_DIR).tar.gz:
@@ -47,8 +48,8 @@ $(PGVECTOR_DIR): $(PGVECTOR_DIR).tar.gz
 $(PREFIX)/lib/vector.so: $(PGVECTOR_DIR) $(PREFIX)/bin/postgres
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(PGVECTOR_DIR) \
 		&& export PG_CONFIG=$(PREFIX)/bin/pg_config \
-		&& make -j \
-		&& make install
+		&& $(MAKE) -j \
+		&& $(MAKE) install
 
 .PHONY: pgvector
 pgvector: postgres $(PREFIX)/lib/vector.so
@@ -61,5 +62,4 @@ clean:
 	rm -rf $(PGVECTOR_DIR)
 
 clean-all: clean
-	rm -rf $(POSTGRES_DIR).tar.gz
-	rm -rf $(PGVECTOR_DIR).tar.gz
+	rm -rf *.tar.gz

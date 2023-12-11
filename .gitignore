@@ -130,5 +130,5 @@ dmypy.json
 .pyre/
 
 build/
-src/postgresql/pgbuild
-src/postgresql/pginstall
+pgbuild/
+src/pgserver/pginstall
