@@ -1,5 +1,5 @@
 [project]
-name = "postgresql" # Required
+name = "pgserver" # Required
 version = "0.0.1"  # Required
 description = "Postgres server with pgvector extension" # Required
 readme = "README.md" # Optional
@@ -15,7 +15,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
-include = ["postgresql*"]  # package names should match these glob patterns (["*"] by default)
+include = ["pgserver*"]  # package names should match these glob patterns (["*"] by default)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
