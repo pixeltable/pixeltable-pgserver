@@ -23,7 +23,7 @@ testpaths = ["tests"]
 [tool.cibuildwheel]
 before-all = "make"
 test-requires = "pytest"
-test-command = "pytest ./tests/test_postgresql.py::test_pgvector"
+test-command = "python -m pytest ./tests"
 
 
 [build-system]
