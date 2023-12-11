@@ -1,5 +1,5 @@
 [project]
-name = "pgserver" # Required
+name = "postgresql" # Required
 version = "0.0.1"  # Required
 description = "Postgres server with pgvector extension" # Required
 readme = "README.md" # Optional
@@ -18,16 +18,16 @@ where = ["src"]  # list of folders that contain the packages (["."] by default)
 include = ["postgresql*"]  # package names should match these glob patterns (["*"] by default)
 
 [tool.pytest.ini_options]
-testpaths = ["src/postgresql/tests"]
+testpaths = ["tests"]
 
 [tool.cibuildwheel]
 before-all = "make"
 test-requires = "pytest"
-test-command = "pytest --pyargs postgresql"
+test-command = "pytest ./tests/test_postgresql.py::test_pgvector"
 
 
 [build-system]
 # These are the assumed default build requirements from pip:
 # https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
-requires = ["setuptools>=43.0.0", "wheel"]
+requires = ["setuptools>=58.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
