@@ -1,4 +1,4 @@
-# postgresql-wheel
+# pgserver
 
 Based on https://github.com/michelp/postgresql-wheel.
 
