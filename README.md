@@ -10,14 +10,13 @@ Python wheel for Linux and MacOS (incl. apple silicon and x86)
 containing a complete, self-contained Postgres server + pgvector
 one can embed in a python application.
 
-* Pip installable.
-* Does not require root or sudo.
+* Pip installable. Tested on ubuntu and mac (apple silicon + x86), including pgvector extension.
+* Does not require `root` or `sudo`.
 * Databases can be initialized in any directory
 * Wrappers to all binaries `initdb` and `pg_ctl` for low level control.
-* Tested on ubuntu and mac (apple silicon + x86)
-* Convenience `get_server` making it easy to think of your postgres instance as a shared data_dir.
+* Convenience `get_server` factory method so you dont need to understand `initdb`, `pg_ctl`, worry about port conflicts, or figure out why you cannot connect.
   manages server process start and stop, accounting for access from multiple independent processes (via refcounting).
-* Other: includes pgvector extension. Includes header files in case you wish to locally build some other extension against it.
+* Includes header files in case you wish to locally build some other extension against it.
 
 ```py
 # Example 1:
