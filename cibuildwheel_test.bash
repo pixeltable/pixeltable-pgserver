@@ -4,7 +4,7 @@ PROJECT=$1
 case "$OSTYPE" in
   darwin*)  
     echo "Running on Mac" 
-    pytest ./tests
+    pytest $PROJECT/tests
     ;;
   linux*)   
     echo "Tests disabled on manylinux conatiner 
