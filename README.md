@@ -28,6 +28,8 @@ import pgserver
 pgdata = f'{MY_APP_DIR}/pgdata'
 db = pgserver.get_server(pgdata)
 # server ready for connection.
+
+print(db.psql('create extension vector'))
 db_uri = db.get_uri()
 # use uri with sqlalchemy / etc.
 
