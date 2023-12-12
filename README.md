@@ -1,19 +1,31 @@
 # pgserver
 
-Based on https://github.com/michelp/postgresql-wheel.
+Lets you create and use a postrgres server with your python app as easily as you would
+sqlite.
+
+Based on https://github.com/michelp/postgresql-wheel, but distribute 
+multi-platform wheels (including macos, apple silicon) 
+as well as a convenience class for managing server sharing across processes and server cleanup when sharers are done so 
+you dont have multiple ghost postgres processes left.
+
+
+
+Can also be used for self-contained testing against postgres.
 
 A fully self-contained, pip installable,
 Python wheel for Linux and MacOS (incl. apple silicon) 
 containing a complete, self-contained Postgres server 
 one can embed in a python application.
 
-* Postgres 15 at the moment
+* Pip installable.
 * Does not require root or sudo.
 * Databases can be initialized in any directory
-* Wrappers to all binaries `initdb` and `pg_ctl`.
-* Higher level convenience handle that abstracts 
+* Wrappers to all binaries `initdb` and `pg_ctl` for low level control.
+* Tested on ubuntu and mac (apple silicon + x86)
+* Convenience `get_server` making it easy to think of your postgres instance as a shared data_dir.
     initdb, pg_ctl, and manages server process start and stop, accounting for 
  access from multiple independent processes (via refcounting).
+* Other: includes pgvector extension.
 
 ```
 # Example 1: 
