@@ -24,7 +24,7 @@ one can embed in a python application.
 * Tested on ubuntu and mac (apple silicon + x86)
 * Convenience `get_server` making it easy to think of your postgres instance as a shared data_dir.
   manages server process start and stop, accounting for access from multiple independent processes (via refcounting).
-* Other: includes pgvector extension.
+* Other: includes pgvector extension. Includes header files in case you wish to locally build some other extension against it.
 
 ```
 # Example 1: 
