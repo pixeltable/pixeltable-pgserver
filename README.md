@@ -14,8 +14,8 @@ one can embed in a python application.
 * Does not require `root` or `sudo`.
 * Databases can be initialized in any directory
 * Wrappers to all binaries `initdb` and `pg_ctl` for low level control.
-* Convenience `get_server` factory method so you dont need to understand `initdb`, `pg_ctl`, worry about port conflicts, or figure out why you cannot connect.
-  manages server process start and stop, accounting for access from multiple independent processes (via refcounting).
+* Convenient start: `get_server` factory method to initialize and start server, so you dont need to understand `initdb`, `pg_ctl`, worry about port conflicts, or figure out why you cannot connect.
+* Convenient cleanup: manages server process cleanup including when server is shared by independent user processes.
 * Includes header files in case you wish to locally build some other extension against it.
 
 ```py
