@@ -23,8 +23,7 @@ one can embed in a python application.
 * Wrappers to all binaries `initdb` and `pg_ctl` for low level control.
 * Tested on ubuntu and mac (apple silicon + x86)
 * Convenience `get_server` making it easy to think of your postgres instance as a shared data_dir.
-    initdb, pg_ctl, and manages server process start and stop, accounting for 
- access from multiple independent processes (via refcounting).
+  manages server process start and stop, accounting for access from multiple independent processes (via refcounting).
 * Other: includes pgvector extension.
 
 ```
