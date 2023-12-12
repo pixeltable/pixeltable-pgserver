@@ -3,18 +3,11 @@
 Lets you create and use a postrgres server with your python app as easily as you would
 sqlite.
 
-Based on https://github.com/michelp/postgresql-wheel, but distribute 
-multi-platform wheels (including macos, apple silicon) 
-as well as a convenience class for managing server sharing across processes and server cleanup when sharers are done so 
-you dont have multiple ghost postgres processes left.
-
-
-
 Can also be used for self-contained testing against postgres.
 
 A fully self-contained, pip installable,
-Python wheel for Linux and MacOS (incl. apple silicon) 
-containing a complete, self-contained Postgres server 
+Python wheel for Linux and MacOS (incl. apple silicon and x86) 
+containing a complete, self-contained Postgres server + pgvector
 one can embed in a python application.
 
 * Pip installable.
@@ -57,3 +50,10 @@ def tmp_postgres():
 
 Postgres binaries in the package can be found in the directory pointed
 to by the `pgserver.pg_bin` global variable. 
+
+Based on https://github.com/michelp/postgresql-wheel, with some differences, eg, multi-platform,
+as well as server management for sharing a server across processes.
+
+
+
+
