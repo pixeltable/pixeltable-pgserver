@@ -1,7 +1,7 @@
 [project]
 name = "pgserver" # Required
-version = "0.0.1"  # Required
-description = "Postgres server with pgvector extension" # Required
+version = "0.0.2"  # Required
+description = "Self-contained postgres server for your python applications" # Required
 readme = "README.md" # Optional
 requires-python = ">=3.8"
 license = {file = "LICENSE.txt"}
