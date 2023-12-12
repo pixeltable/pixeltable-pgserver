@@ -1,1 +1,1 @@
-postgresql/_version.py export-subst
+pgserver/_version.py export-subst

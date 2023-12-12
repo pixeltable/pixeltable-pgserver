@@ -1,1 +1,1 @@
-graft src/postgresql/pginstall
+graft src/pgserver/pginstall

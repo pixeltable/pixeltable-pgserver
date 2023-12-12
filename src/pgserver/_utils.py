@@ -4,15 +4,13 @@ from typing import Optional, Dict, Union, List
 import shutil
 import atexit
 import subprocess
-import fasteners
 import json
 import os
-import platformdirs
 
-__all__ = ['PostgresServer']
+__all__ = ['get_server']
 
 
-class DiskList:
+class _DiskList:
     """ A list of integers stored in a file on disk.
     """
     def __init__(self, path : Path):
@@ -46,6 +44,9 @@ class DiskList:
 class PostgresServer:
     """ Provides a common interface for interacting with a server.
     """
+    import platformdirs
+    import fasteners
+
     _instances : Dict[Path, 'PostgresServer'] = {}
 
     # lockfile for whole class
@@ -54,7 +55,7 @@ class PostgresServer:
 
     def __init__(self, pgdata : Path, *, cleanup_mode : Optional[str] = 'stop'):
         """ Initializes the postgresql server instance.
-            Not intended to be called directly, use get_server() instead.
+            Constructor is intended to be called directly, use get_server() instead.
         """
         assert cleanup_mode in [None, 'stop', 'delete']
 
@@ -62,18 +63,13 @@ class PostgresServer:
         self.log = self.pgdata / 'log'
         self.socket_dir = self.pgdata
         self.user = "postgres"
-        self.handle_pids = DiskList(self.pgdata / '.handle_pids.json')
+        self.handle_pids = _DiskList(self.pgdata / '.handle_pids.json')
         self._postmaster_pid = self.pgdata / 'postmaster.pid'
         self.cleanup_mode = cleanup_mode
 
         self._count = 0
         atexit.register(self._cleanup)
         self._startup()
-
-    def get_executable_path(self) -> Path:
-        """ Returns the path to the postgresql executable.
-        """
-        return pg_bin
 
     def get_pid(self) -> Optional[int]:
         """ Returns the pid of the postgresql server process.
@@ -134,7 +130,7 @@ class PostgresServer:
     def psql(self, command : str) -> str:
         """ Runs a psql command on this server. The command is passed to psql via stdin.
         """
-        executable = self.get_executable_path() / 'psql'
+        executable = pg_bin / 'psql'
         stdout = subprocess.check_output(f'{executable} {self.get_uri()}',
                                          input=command.encode(), shell=True)
         return stdout.decode("utf-8")
@@ -153,26 +149,26 @@ class PostgresServer:
         """
         self._cleanup()
 
-    @classmethod
-    def get_server(cls, pgdata : Union[Path,str] , cleanup_mode : Optional[str] = 'stop' ) -> 'PostgresServer':
-        """ Returns handle to postgresql server instance for the given pgdata directory. 
-        Args:
-            pgdata: pddata directory. If the pgdata directory does not exist, it will be created.
-            cleanup_mode: If 'stop', the server will be stopped when the last handle is closed (default)
-                          If 'delete', the server will be stopped and the pgdata directory will be deleted.
-                          If None, the server will not be stopped or deleted.
-                          
-            To create a truly temporary server, use mkdtemp() to create a temporary directory and pass it as pg_data, 
-            and set cleanup_mode to 'delete'.
-        """
-        if isinstance(pgdata, str):
-            pgdata = Path(pgdata)
-        pgdata = pgdata.expanduser().resolve()
 
-        if pgdata in cls._instances:
-            return cls._instances[pgdata]
+def get_server(pgdata : Union[Path,str] , cleanup_mode : Optional[str] = 'stop' ) -> PostgresServer:
+    """ Returns handle to postgresql server instance for the given pgdata directory. 
+    Args:
+        pgdata: pddata directory. If the pgdata directory does not exist, it will be created.
+        cleanup_mode: If 'stop', the server will be stopped when the last handle is closed (default)
+                        If 'delete', the server will be stopped and the pgdata directory will be deleted.
+                        If None, the server will not be stopped or deleted.
+                        
+        To create a truly temporary server, use mkdtemp() to create a temporary directory and pass it as pg_data, 
+        and set cleanup_mode to 'delete'.
+    """
+    if isinstance(pgdata, str):
+        pgdata = Path(pgdata)
+    pgdata = pgdata.expanduser().resolve()
 
-        return PostgresServer(pgdata, cleanup_mode=cleanup_mode)
+    if pgdata in PostgresServer._instances:
+        return PostgresServer._instances[pgdata]
+
+    return PostgresServer(pgdata, cleanup_mode=cleanup_mode)
 
 
 

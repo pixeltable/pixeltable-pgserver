@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-PREFIX := $(shell pwd)/src/pgserver/pginstall/
+PREFIX := $(shell pwd)/../src/pgserver/pginstall/
 BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
