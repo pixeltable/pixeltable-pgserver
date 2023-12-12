@@ -19,7 +19,7 @@ one can embed in a python application.
   manages server process start and stop, accounting for access from multiple independent processes (via refcounting).
 * Other: includes pgvector extension. Includes header files in case you wish to locally build some other extension against it.
 
-```
+```py
 # Example 1:
 pip install pgserver
 # postgres backed application
