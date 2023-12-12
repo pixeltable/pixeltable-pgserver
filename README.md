@@ -20,7 +20,8 @@ one can embed in a python application.
 * Other: includes pgvector extension. Includes header files in case you wish to locally build some other extension against it.
 
 ```
-# Example 1: 
+# Example 1:
+pip install pgserver
 # postgres backed application
 import pgserver
 
