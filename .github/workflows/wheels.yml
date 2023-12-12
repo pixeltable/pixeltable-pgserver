@@ -43,19 +43,24 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v3
         with:
-          path: ./wheelhouse/*.whl
+          path: wheelhouse/*.whl
+          name: wheels
+  test_ubuntu_wheel:
+    name: Test on ubuntu-20.04
+    runs-on: ubuntu-20.04
+    needs: build_wheels
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v3
-        if: matrix.os == 'ubuntu-20.04'
         with:
-          name: artifact
+          name: wheels
           path: dist
       - uses: actions/setup-python@v3
-        if: matrix.os == 'ubuntu-20.04'
         with:
           python-version: '3.8'
       - name: Install wheel
-        if: matrix.os == 'ubuntu-20.04'
-        run: python -m pip install --upgrade pip && python -m pip install --force-reinstall dist/*cp38*manylinux*x86*.whl
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --force-reinstall dist/*cp38*manylinux*x86*.whl
       - name: Test wheel
-        if: matrix.os == 'ubuntu-20.04'
         run: pytest ./tests
