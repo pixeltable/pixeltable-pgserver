@@ -20,10 +20,10 @@ jobs:
           # (like pg_config), which would have been cross-compiled and cannot run on the host
           # to keep things simple just build on the -xlarge instance, which is arm64.exclude:
           # ubuntu arm64 may have similar issues (but useful for newer aws machines)
-          - os: macos-latest-xlarge
-            arch: arm64
-          - os: macos-latest
-            arch: x86_64
+          # - os: macos-latest-xlarge
+          #   arch: arm64
+          # - os: macos-latest
+          #   arch: x86_64
           - os: ubuntu-20.04 # for testing
             arch: x86_64
     steps:

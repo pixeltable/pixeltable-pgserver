@@ -16,8 +16,32 @@ one can embed in a python application.
  access from multiple independent processes (via refcounting).
 
 ```
-handleA = pgserver.get_server('/path/to/pgdataA') # inits and starts server
-uriA = handle.get_uri() # can use with eg, 
+# Example 1: 
+# postgres backed application
+import pgserver
+
+pgdata = f'{MY_APP_DIR}/pgdata'
+db = pgserver.get_server(pgdata)
+# server ready for connection.
+db_uri = db.get_uri()
+# use uri with sqlalchemy / etc.
+
+# if no other process is using this server, it will be shutdown at exit,
+# if other process use same pgadata, server process will be shutdown when all stop.
+sys.exit()
+
+
+
+# Example 2:  
+# Testing
+import tempfile
+import pytest
+@pytest.fixture
+def tmp_postgres():
+    tmp_pg_data = tempfile.mkdtemp()
+    with pgserver.get_server(tmp_pg_data, cleanup_mode='delete') as pg:
+        yield pg
+
 ```
 
 Postgres binaries in the package can be found in the directory pointed
