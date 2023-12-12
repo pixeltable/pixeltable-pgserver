@@ -13,9 +13,10 @@ one can embed in a python application.
 * Pip installable. Tested on ubuntu and mac (apple silicon + x86), including pgvector extension.
 * Does not require `root` or `sudo`.
 * Databases can be initialized in any directory
-* Wrappers to all binaries `initdb` and `pg_ctl` for low level control.
-* Convenient start: `get_server` factory method to initialize and start server, so you dont need to understand `initdb`, `pg_ctl`, worry about port conflicts, or figure out why you cannot connect.
+* Wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`, for low level control.
+* Convenient start: `get_server` factory method to initialize and start server, so you dont need to understand `initdb`, `pg_ctl`, worry about port conflicts, or spend time debugging why you cannot connect.
 * Convenient cleanup: manages server process cleanup including when server is shared by independent user processes.
+* Context manager protocol.
 * Includes header files in case you wish to locally build some other extension against it.
 
 ```py
