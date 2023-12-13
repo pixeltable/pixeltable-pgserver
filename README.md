@@ -1,28 +1,26 @@
-# pgserver
+# `pgserver`: pip installable self-contained postgres server 
 
-Lets you create and use a postrgres server with your python app as easily as you would
-sqlite.
+`pip install pgserver`
 
-Can also be used for self-contained testing against postgres.
+`pgserver` lets you create and manage a Postgres within your Python app, with server binaries included.
+Wheels are built for multiple platforms.
 
-A fully self-contained, pip installable,
-Python wheel for Linux and MacOS (incl. apple silicon and x86) 
-containing a complete, self-contained Postgres server + pgvector
-one can embed in a python application.
+### Example use cases:
+* Building a Postgres-backed yet still self-contained Python app, much like you would with `sqlite`.
+* Developing and testing apps that depend on some external Postgres (as a dev dependency)
 
-* Pip installable. Tested on ubuntu and mac (apple silicon + x86), including pgvector extension.
-* Does not require `root` or `sudo`.
-* Databases can be initialized in any directory
-* Wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`, for low level control.
-* Convenient start: `get_server` factory method to initialize and start server, so you dont need to understand `initdb`, `pg_ctl`, worry about port conflicts, or spend time debugging why you cannot connect.
-* Convenient cleanup: manages server process cleanup including when server is shared by independent user processes.
-* Context manager protocol.
-* Includes header files in case you wish to locally build some other extension against it.
+### Basic summary:
+* *Pip installable binaries*: tested on Ubuntu and MacOS (apple silicon + x86), including pgvector extension.
+* *No sudo* Does not require `root` or `sudo`.
+* *Convenient startup* `pgserver.get_server(MY_DATA_DIR)` factory method to initialize data and server if needed, so you skip needing to understand `initdb`, `pg_ctl`, port conflicts, or why you cannot connect to the server.
+* *Convenient cleanup* server process cleanup is done for you, including when multiple independent processes call
+`pgserver.get_server(MY_DATA_DIR)`
+* Context manager protocol to explicitly control cleanup.
+* For lower-level control, wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`.
+* Includes header files in case you wish to build some other extension and use it against these binaries.
 
 ```py
-# Example 1:
-pip install pgserver
-# postgres backed application
+# Example 1: postgres backed application
 import pgserver
 
 pgdata = f'{MY_APP_DIR}/pgdata'
@@ -31,16 +29,14 @@ db = pgserver.get_server(pgdata)
 
 print(db.psql('create extension vector'))
 db_uri = db.get_uri()
-# use uri with sqlalchemy / etc.
+# use uri with sqlalchemy / psychopg, etc
 
 # if no other process is using this server, it will be shutdown at exit,
 # if other process use same pgadata, server process will be shutdown when all stop.
-sys.exit()
+```
 
-
-
-# Example 2:  
-# Testing
+```py
+# Example 2: Testing
 import tempfile
 import pytest
 @pytest.fixture
@@ -48,15 +44,13 @@ def tmp_postgres():
     tmp_pg_data = tempfile.mkdtemp()
     with pgserver.get_server(tmp_pg_data, cleanup_mode='delete') as pg:
         yield pg
-
 ```
 
 Postgres binaries in the package can be found in the directory pointed
 to by the `pgserver.pg_bin` global variable. 
 
-Based on https://github.com/michelp/postgresql-wheel, with some differences, eg, multi-platform,
-as well as server management for sharing a server across processes.
-
-
-
+Based on https://github.com/michelp/postgresql-wheel, with the following differences:
+1. Wheels for multiple platforms (MacOS)
+2. Server management (initialization and cleanup in a multi-process scenario)
+3. pgvector extension included
 
