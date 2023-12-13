@@ -11,13 +11,12 @@ Wheels are built for multiple platforms.
 
 ### Basic summary:
 * *Pip installable binaries*: tested on Ubuntu and MacOS (apple silicon + x86), including pgvector extension.
-* *No sudo* Does not require `root` or `sudo`.
-* *Convenient startup* `pgserver.get_server(MY_DATA_DIR)` factory method to initialize data and server if needed, so you skip needing to understand `initdb`, `pg_ctl`, port conflicts, or why you cannot connect to the server.
-* *Convenient cleanup* server process cleanup is done for you, including when multiple independent processes call
+* *No sudo needed*: Does not require `root` or `sudo`.
+* *Convenient startup*: `pgserver.get_server(MY_DATA_DIR)` factory method to initialize data and server if needed, so you don't need to understand `initdb`, `pg_ctl`, port conflicts, and skip debugging why you still cannot connect to the server.
+* *Convenient cleanup*: server process cleanup is done for you, including when multiple independent processes call
 `pgserver.get_server(MY_DATA_DIR)`
-* Context manager protocol to explicitly control cleanup.
-* For lower-level control, wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`.
-* Includes header files in case you wish to build some other extension and use it against these binaries.
+* Context manager protocol to explicitly control cleanup timing in testing scenarios.
+* For lower-level control, wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`. Includes header files in case you wish to build some other extension and use it against these binaries.
 
 ```py
 # Example 1: postgres backed application
