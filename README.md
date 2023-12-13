@@ -29,7 +29,7 @@ db = pgserver.get_server(pgdata)
 
 print(db.psql('create extension vector'))
 db_uri = db.get_uri()
-# use uri with sqlalchemy / psychopg, etc
+# use uri with sqlalchemy / psycopg, etc
 
 # if no other process is using this server, it will be shutdown at exit,
 # if other process use same pgadata, server process will be shutdown when all stop.
