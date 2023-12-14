@@ -49,7 +49,7 @@ Postgres binaries in the package can be found in the directory pointed
 to by the `pgserver.pg_bin` global variable. 
 
 Based on https://github.com/michelp/postgresql-wheel, with the following differences:
-1. Wheels for multiple platforms (MacOS)
-2. Server management (initialization and cleanup in a multi-process scenario)
-3. pgvector extension included
-
+1. +Wheels for multiple platforms (+MacOS x86, +MacOS apple silicon)
+2. +Server management (initialization and cleanup including multi-process )
+3. +pgvector extension included
+4. -postGIS (many dependencies => harder to build cross platform. pull requests taken)
