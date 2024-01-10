@@ -6,6 +6,8 @@ import atexit
 import subprocess
 import json
 import os
+import logging
+import hashlib
 
 __all__ = ['get_server']
 
@@ -51,6 +53,7 @@ class PostgresServer:
 
     # lockfile for whole class
     # home dir does not always support locking (eg some clusters)
+    runtime_path : Path = platformdirs.user_runtime_path('python_PostgresServer')
     _lock  = fasteners.InterProcessLock(platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile')
 
     def __init__(self, pgdata : Path, *, cleanup_mode : Optional[str] = 'stop'):
@@ -61,7 +64,7 @@ class PostgresServer:
 
         self.pgdata = pgdata
         self.log = self.pgdata / 'log'
-        self.socket_dir = self.pgdata
+
         self.user = "postgres"
         self.handle_pids = _DiskList(self.pgdata / '.handle_pids.json')
         self._postmaster_pid = self.pgdata / 'postmaster.pid'
@@ -70,6 +73,18 @@ class PostgresServer:
         self._count = 0
         atexit.register(self._cleanup)
         self._startup()
+
+    def _make_socket_dir(self) -> Path:
+        default_socket_dir = os.environ.get('PGSERVER_SOCKET_DIR', str(self.runtime_path))
+        if len(default_socket_dir) > 100:
+            logging.warning(f'''Socket directory {default_socket_dir} is too long for domain sockets,
+                            using /tmp/ instead. Set PGSERVER_SOCKET_DIR environment variable to override.''')
+            default_socket_dir = '/tmp/'
+        
+        path_hash = hashlib.sha256(str(self.pgdata).encode()).hexdigest()[:10]
+        socket_dir = Path(default_socket_dir) / path_hash
+        socket_dir.mkdir(parents=True, exist_ok=True)
+        return socket_dir
 
     def get_pid(self) -> Optional[int]:
         """ Returns the pid of the postgresql server process.
@@ -97,7 +112,8 @@ class PostgresServer:
             if not (self.pgdata / 'PG_VERSION').exists():
                 initdb(f"-D {self.pgdata} --auth=trust --auth-local=trust -U {self.user}")
 
-            if self.get_pid() is None:            
+            self.socket_dir = self._make_socket_dir()
+            if self.get_pid() is None:
                 pg_ctl(f'-D {self.pgdata} -w -o "-k {self.socket_dir} -h \\"\\"" -l {self.log} start')
 
             self.handle_pids.get_and_add(os.getpid())
@@ -158,7 +174,7 @@ def get_server(pgdata : Union[Path,str] , cleanup_mode : Optional[str] = 'stop' 
                         If 'delete', the server will be stopped and the pgdata directory will be deleted.
                         If None, the server will not be stopped or deleted.
                         
-        To create a truly temporary server, use mkdtemp() to create a temporary directory and pass it as pg_data, 
+        To create a temporary server, use mkdtemp() to create a temporary directory and pass it as pg_data, 
         and set cleanup_mode to 'delete'.
     """
     if isinstance(pgdata, str):
