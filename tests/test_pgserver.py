@@ -4,6 +4,11 @@ import subprocess
 import tempfile
 from typing import Optional
 import multiprocessing as mp
+import shutil
+import time
+from pathlib import Path
+
+from pgserver.shared  import _process_is_running
 
 
 def _check_server_works(pg : 'PostgresServer') -> int:
@@ -13,15 +18,6 @@ def _check_server_works(pg : 'PostgresServer') -> int:
     ret = pg.psql("show data_directory;")
     assert str(pg.pgdata) in ret
     return pid
-
-def _server_is_running(pid : int) -> bool:
-    assert pid is not None
-    try: 
-        subprocess.run(["kill", "-0", str(pid)], check=True)
-        return True
-    except subprocess.CalledProcessError:
-        pass
-    return False
 
 def _kill_server(pid : Optional[int]) -> None:
     if pid is None:
@@ -35,7 +31,7 @@ def test_cleanup_default():
             with pgserver.get_server(tmpdir) as pg:
                 pid = _check_server_works(pg)
 
-            assert not _server_is_running(pid)
+            assert not _process_is_running(pid)
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -52,7 +48,7 @@ def test_reentrant():
 
                 _check_server_works(pg)
 
-            assert not _server_is_running(pid)
+            assert not _process_is_running(pid)
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -67,7 +63,7 @@ def _start_and_wait(tmpdir, queue_in, queue_out):
 
 def test_multiprocess_shared():
     """ Test that multiple processes can share the same server
-        by getting server in a child process, 
+        by getting server in a child process,
         then getting it again in the parent process.
         then exiting the child process.
         Then checking that the parent can still use the server.
@@ -89,14 +85,34 @@ def test_multiprocess_shared():
                 # tell child to continue
                 queue_to_child.put(None)
                 child.join()
-            
+
                 # check server still works
                 _check_server_works(pg)
 
-            assert not _server_is_running(server_pid_parent)
+            assert not _process_is_running(server_pid_parent)
     finally:
-        _kill_server(pid)                
+        _kill_server(pid)
 
+def test_dir_length():
+    long_prefix = '_'.join(['long'] + ['1234567890']*12)
+    assert len(long_prefix) > 120
+    prefixes = ['short', long_prefix]
+
+    for prefix in prefixes:
+        with tempfile.TemporaryDirectory(dir='/tmp/', prefix=prefix) as tmpdir:
+            pid = None
+            try:
+                with pgserver.get_server(tmpdir) as pg:
+                    pid = _check_server_works(pg)
+
+                assert not _process_is_running(pid)
+                assert pg.pgdata.exists()
+                if len(prefix) > 120:
+                    assert str(tmpdir) not in pg.get_uri()
+                else:
+                    assert str(tmpdir) in pg.get_uri()
+            finally:
+                _kill_server(pid)
 
 def test_cleanup_delete():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -105,7 +121,7 @@ def test_cleanup_delete():
             with pgserver.get_server(tmpdir, cleanup_mode='delete') as pg:
                 pid = _check_server_works(pg)
 
-            assert not _server_is_running(pid)
+            assert not _process_is_running(pid)
             assert not pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -117,7 +133,7 @@ def test_cleanup_none():
             with pgserver.get_server(tmpdir, cleanup_mode=None) as pg:
                 pid = _check_server_works(pg)
 
-            assert _server_is_running(pid)
+            assert _process_is_running(pid)
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -131,3 +147,51 @@ def tmp_postgres():
 def test_pgvector(tmp_postgres):
     ret = tmp_postgres.psql("CREATE EXTENSION vector;")
     assert ret == "CREATE EXTENSION\n"
+
+def test_start_failure_log(caplog):
+    """ Test server log contents are shown in python log when failures
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with pgserver.get_server(tmpdir) as _:
+            pass
+
+        ## now delete some files to make it fail
+        for f in Path(tmpdir).glob('**/postgresql.conf'):
+            f.unlink()
+
+        with pytest.raises(subprocess.CalledProcessError):
+            with pgserver.get_server(tmpdir) as _:
+                pass
+
+        assert 'postgres: could not access the server configuration file' in caplog.text
+
+@pytest.mark.skip(reason="run locally only (needs dep)")
+def test_uri_string(tmp_postgres):
+    import sqlalchemy as sa
+    engine = sa.create_engine(tmp_postgres.get_uri('mydb'))
+    conn = engine.connect()
+    with conn.begin():
+        conn.execute(sa.text("create table foo (id int);"))
+        conn.execute(sa.text("insert into foo values (1);"))
+        cur = conn.execute(sa.text("select * from foo;"))
+        assert cur.fetchone()[0] == 1
+
+@pytest.mark.skip(reason="not implemented")
+def test_delete_pgdata_cleanup(tmp_postgres):
+    """ Test server process is stopped when pgdata is deleted.
+    """
+    assert tmp_postgres.pgdata.exists()
+    pid =  tmp_postgres.get_pid()
+    assert pid is not None
+    assert _process_is_running(pid)
+
+    # external deletion of pgdata should stop server
+    shutil.rmtree(tmp_postgres.pgdata)
+
+    # wait for server to stop
+    for _ in range(20): # wait at most 3 seconds.
+        time.sleep(.2)
+        if not _process_is_running(pid):
+            break
+
+    assert not _process_is_running(pid)
