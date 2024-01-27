@@ -7,7 +7,6 @@ import multiprocessing as mp
 import shutil
 import time
 from pathlib import Path
-
 from pgserver.shared  import _process_is_running
 
 
@@ -164,6 +163,31 @@ def test_start_failure_log(caplog):
                 pass
 
         assert 'postgres: could not access the server configuration file' in caplog.text
+
+def test_reuse_deleted_datadir():
+    """ test that new server starts normally on same datadir after datadir is deleted
+    """
+    long_prefix = '_'.join(['long'] + ['1234567890']*12)
+    assert len(long_prefix) > 120
+    prefixes = ['short', long_prefix]
+
+    for prefix in prefixes:
+        with tempfile.TemporaryDirectory(dir='/tmp/', prefix=prefix) as tmpdir:
+            try:
+                pgdata = Path(tmpdir) / 'pgdata'
+                with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
+                    orig_pid = _check_server_works(pg)
+
+                shutil.rmtree(pgdata)
+
+                # starting the server on same dir should work
+                with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
+                    new_pid = _check_server_works(pg)
+                    assert orig_pid != new_pid
+
+            finally:
+                _kill_server(orig_pid)
+                _kill_server(new_pid)
 
 @pytest.mark.skip(reason="run locally only (needs dep)")
 def test_uri_string(tmp_postgres):
