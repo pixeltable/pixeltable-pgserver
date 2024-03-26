@@ -2,7 +2,7 @@
 
 `pip install pgserver`
 
-`pgserver` lets you create and manage a Postgres within your Python app, with server binaries included.
+`pgserver` lets you initialize (if needed) and run a Postgres server associated with a data dir within your Python app, with server binaries included.
 Wheels are built for multiple platforms.
 
 ### Example use cases:
