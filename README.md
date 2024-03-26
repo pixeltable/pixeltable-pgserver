@@ -7,6 +7,7 @@ Wheels are built for multiple platforms.
 
 ### Example use cases:
 * The main motivation is letting one building a Postgres-backed python app that remains pip-installable, while saving your users any need to setup postgres if they dont have it.
+* The second advantage is to not have to remember how to set-up a local postgres server, instead you immediately get a sqlalchemy or psql usable URI string.
 * Developing and testing apps that depend on some external Postgres (as a dev dependency)
 
 ### Basic summary:
