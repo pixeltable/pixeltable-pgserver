@@ -12,9 +12,9 @@ Wheels are built for multiple platforms.
 ### Basic summary:
 * *Pip installable binaries*: tested on Ubuntu and MacOS (apple silicon + x86), including pgvector extension.
 * *No sudo needed*: Does not require `root` or `sudo`.
-* *Convenient startup*: `pgserver.get_server(MY_DATA_DIR)` factory method to initialize data and server if needed, so you don't need to understand `initdb`, `pg_ctl`, port conflicts, and skip debugging why you still cannot connect to the server.
-* *Convenient cleanup*: server process cleanup is done for you, including when multiple independent processes call
-`pgserver.get_server(MY_DATA_DIR)`
+* *Init handled foryou: `pgserver.get_server(MY_DATA_DIR)` factory method to initialize data and server if needed, so you don't need to understand `initdb`, `pg_ctl`, port conflicts, and skip debugging why you still cannot connect to the server, just do `server.get_uri()` to connect. Uses unix domain sockets to avoid port conflicts.
+* *Convenient cleanup*: server process cleanup is done for you: when the process using pgserver ends, the server is shutdown, including when multiple independent processes call
+`pgserver.get_server(MY_DATA_DIR)` on the same dir (wait for last one)
 * Context manager protocol to explicitly control cleanup timing in testing scenarios.
 * For lower-level control, wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`. Includes header files in case you wish to build some other extension and use it against these binaries.
 
@@ -48,8 +48,8 @@ def tmp_postgres():
 Postgres binaries in the package can be found in the directory pointed
 to by the `pgserver.pg_bin` global variable. 
 
-Based on https://github.com/michelp/postgresql-wheel, with the following differences:
-1. +Wheels for multiple platforms (+MacOS x86, +MacOS apple silicon)
-2. +Server management (initialization and cleanup including multi-process )
-3. +pgvector extension included
-4. -postGIS (many dependencies => harder to build cross platform. pull requests taken)
+Based on https://github.com/michelp/postgresql-wheel, but with the following differences:
+1. + Wheels for multiple platforms (ubuntu x86, +MacOS x86, +MacOS apple silicon)
+2. + Postgres Server management: cleanup via shared count when multiple processes use the same server.
+3. + pgvector extension included
+4. - no postGIS (need to build cross platform. pull requests taken)
