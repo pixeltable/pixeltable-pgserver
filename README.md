@@ -6,11 +6,11 @@
 Wheels are built for multiple platforms.
 
 ### Example use cases:
-* Building a Postgres-backed yet still self-contained Python app, much like you would with `sqlite`.
+* The main motivation is letting one building a Postgres-backed python app that remains pip-installable, while saving your users any need to setup postgres if they dont have it.
 * Developing and testing apps that depend on some external Postgres (as a dev dependency)
 
 ### Basic summary:
-* *Pip installable binaries*: tested on Ubuntu and MacOS (apple silicon + x86), including pgvector extension.
+* *Pip installable binaries*: tested on Ubuntu and MacOS (apple silicon + x86), including pgvector extension. 
 * *No sudo needed*: Does not require `root` or `sudo`.
 * *Init handled foryou: `pgserver.get_server(MY_DATA_DIR)` factory method to initialize data and server if needed, so you don't need to understand `initdb`, `pg_ctl`, port conflicts, and skip debugging why you still cannot connect to the server, just do `server.get_uri()` to connect. Uses unix domain sockets to avoid port conflicts.
 * *Convenient cleanup*: server process cleanup is done for you: when the process using pgserver ends, the server is shutdown, including when multiple independent processes call
