@@ -1,4 +1,4 @@
-# `pgserver`: pip installable self-contained postgres server 
+# `pgserver`: pip installable self-contained postgres server that sets itself up for you 
 
 `pip install pgserver`
 
