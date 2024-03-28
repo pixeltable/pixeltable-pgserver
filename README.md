@@ -1,4 +1,4 @@
-![icon](pgserver_small.png)
+![icon](pgserver_square_small.png)
 # `pgserver`: pip installable self-contained postgres server that sets itself up for you 
 
 `pip install pgserver`
