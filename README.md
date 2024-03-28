@@ -1,5 +1,8 @@
-![icon](pgserver_square_small.png)
-# `pgserver`: pip installable self-contained postgres server that sets itself up for you 
+<p align="center">
+  <img src="pgserver_square_small.png"/>
+</p>
+
+# `pgserver`: pip-installable postgres + pgvector for your python app
 
 `pip install pgserver`
 
