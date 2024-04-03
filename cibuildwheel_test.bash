@@ -23,5 +23,5 @@ case "$OSTYPE" in
     # su - dbuser -c "$PYTHON -m pytest $PROJECT/tests"
     ;;
   *)
-    echo "Unsupported OS" ; exit 1 ;;
+    echo "Unsupported OS:" $OSTYPE; exit 1 ;;
 esac
