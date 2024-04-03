@@ -13,7 +13,7 @@ jobs:
           # using macos-latest-xlarge for arm64 apple build:
           # macos-latest can cross compile for arm64, even though it is a x86_64 system
           # (see pyav build workflow)
-          # however the build code for pg extensions themselves can depend on some generated binaries
+          # however the build code for pg extensions themselves depends on some generated binaries
           # (like pg_config), which would have been cross-compiled and cannot run on the host
           # to keep things simple just build on the -xlarge instance, which is arm64.exclude:
           # ubuntu arm64 may have similar issues (but useful for newer aws machines)
@@ -22,6 +22,8 @@ jobs:
           - os: macos-latest
             arch: x86_64
           - os: ubuntu-20.04 # for testing
+            arch: x86_64
+          - os: windows-latest
             arch: x86_64
     steps:
       - uses: actions/checkout@v4
@@ -59,21 +61,21 @@ jobs:
           python -m pip install --upgrade pip pytest
           python -m pip install --force-reinstall dist/*cp38*manylinux*x86*.whl
           pytest ./tests
-  publish-to-pypi:
-    name: Publish Python dist to PyPI
-    needs:
-    - build_wheels
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/pgserver  # Replace <package-name> with your PyPI project name
-    permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
-    steps:
-        - name: Download all the dists
-          uses: actions/download-artifact@v3
-          with:
-            name: python-package-distributions
-            path: dist/
-        - name: Publish distribution 📦 to PyPI
-          uses: pypa/gh-action-pypi-publish@release/v1
+  # publish-to-pypi:
+  #   name: Publish Python dist to PyPI
+  #   needs:
+  #   - build_wheels
+  #   runs-on: ubuntu-latest
+  #   environment:
+  #     name: pypi
+  #     url: https://pypi.org/p/pgserver  # Replace <package-name> with your PyPI project name
+  #   permissions:
+  #     id-token: write  # IMPORTANT: mandatory for trusted publishing
+  #   steps:
+  #       - name: Download all the dists
+  #         uses: actions/download-artifact@v3
+  #         with:
+  #           name: python-package-distributions
+  #           path: dist/
+  #       - name: Publish distribution 📦 to PyPI
+  #         uses: pypa/gh-action-pypi-publish@release/v1
