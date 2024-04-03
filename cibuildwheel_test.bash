@@ -2,10 +2,6 @@
 PROJECT=$1
 
 case "$OSTYPE" in
-  darwin*)  
-    echo "Running on Mac" 
-    pytest $PROJECT/tests
-    ;;
   linux*)   
     echo "Tests disabled on manylinux conatiner 
         bc postgres prevents running as root"
@@ -22,6 +18,12 @@ case "$OSTYPE" in
     # chmod -R 777 /tmp # includes ENV
     # su - dbuser -c "$PYTHON -m pytest $PROJECT/tests"
     ;;
+  darwin*)  
+    echo "Running on Mac" 
+    pytest $PROJECT/tests
+    ;;
   *)
-    echo "Unsupported OS:" $OSTYPE; exit 1 ;;
+    echo "Mystery OS:" $OSTYPE; 
+    pytest $PROJECT/tests    
+    ;;
 esac
