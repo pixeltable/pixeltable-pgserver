@@ -67,7 +67,6 @@ def socket_name_length_ok(socket_name : Path):
         socket_name.unlink(missing_ok=True)
 
 
-
 class PostgresServer:
     """ Provides a common interface for interacting with a server.
     """
@@ -193,7 +192,13 @@ class PostgresServer:
                     socket_dir.chmod(0o777)
 
                 try:
-                    pg_ctl(['-w',  '-o',  f'-k {socket_dir} -h \\"\\"', '-l', str(self.log),  'start'],
+                    # -o to pg_ctl are options to be passed directly to the postgres executable, be wary of quotes (man pg_ctl)
+                    pg_ctl(['-w',  # wait for server to start
+                            '-o',  f'-k {socket_dir}', # socket option (forwarded to postgres exec) see man postgres for -k
+                            '-o', '-h ""',  # no listening on any IP addresses (forwarded to postgres exec) see man postgres for -hj
+                            '-l', str(self.log),   # log location: set to pgdata dir also
+                            'start' # action
+                            ],
                            pgdata=self.pgdata, user=self.system_user)
                 except subprocess.CalledProcessError as err:
                     logging.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")

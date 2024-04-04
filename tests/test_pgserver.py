@@ -10,7 +10,7 @@ from pathlib import Path
 from pgserver.shared  import _process_is_running
 
 
-def _check_server_works(pg : 'PostgresServer') -> int:
+def _check_server_works(pg : pgserver.PostgresServer) -> int:
     assert pg.pgdata.exists()
     pid = pg.get_pid()
     assert pid is not None
@@ -27,6 +27,14 @@ def test_get_server():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
         try:
+            # check case when initializing the pgdata dir
+            with pgserver.get_server(tmpdir) as pg:
+                pid = _check_server_works(pg)
+
+            assert not _process_is_running(pid)
+            assert pg.pgdata.exists()
+
+            # check case when pgdata dir is already initialized
             with pgserver.get_server(tmpdir) as pg:
                 pid = _check_server_works(pg)
 
@@ -34,6 +42,7 @@ def test_get_server():
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
+
 
 def test_reentrant():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -61,11 +70,12 @@ def _start_and_wait(tmpdir, queue_in, queue_out):
         _ = queue_in.get()
 
 def test_multiprocess_shared():
-    """ Test that multiple processes can share the same server
-        by getting server in a child process,
-        then getting it again in the parent process.
-        then exiting the child process.
-        Then checking that the parent can still use the server.
+    """ Test that multiple processes can share the same server.
+
+        1. get server in a child process,
+        2. then, get server in the parent process
+        3. then, exiting the child process
+        4. checking the parent can still use the server.
     """
     pid = None
     try:
@@ -177,9 +187,9 @@ def _reuse_deleted_datadir(prefix):
 
         shutil.rmtree(pgdata)
         assert not pgdata.exists()
-        # TODO: why does the test fail in some environments if I dont kill the old server here?
-        # if the directory is new, why does it somehow conflict with the old server
-        _kill_server(orig_pid)
+        # # TODO: why does the test fail in some environments if I dont kill the old server here?
+        # # if the directory is new, why does it somehow conflict with the old server
+        # _kill_server(orig_pid)
 
         # starting the server on same dir should work
         with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
@@ -190,6 +200,15 @@ def _reuse_deleted_datadir(prefix):
         _kill_server(new_pid)
 
     shutil.rmtree(tmpdir)
+
+def test_no_conflict():
+    """ test we can start pgservers on two different datadirs with no conflict (eg port conflict)
+    """
+    with tempfile.TemporaryDirectory() as tmpdir1, tempfile.TemporaryDirectory() as tmpdir2:
+        with pgserver.get_server(tmpdir1) as pg1, pgserver.get_server(tmpdir2) as pg2:
+            pid1 = _check_server_works(pg1)
+            pid2 = _check_server_works(pg2)
+
 
 def test_reuse_deleted_datadir_short():
     """ test that new server starts normally on same datadir after datadir is deleted

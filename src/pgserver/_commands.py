@@ -74,10 +74,12 @@ def create_command_function(pg_exe_name : str) -> Callable:
         try:
             result = subprocess.run(full_command_line, check=True, capture_output=True, text=True,
                                     user=user)
-
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed command run as user `{user}` with error:\n{e}\nstderr:\n{e.stderr}\n-----\nstdout:\n{e.stdout}\n-----\n")
-            raise e
+            logging.info("Successful postgres command %s as user `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
+                         result.args, user, result.stdout, result.stderr)
+        except subprocess.CalledProcessError as err:
+            logging.error("Failed postgres command %s as user `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
+                          err.args, user, str(err), err.stdout, err.stderr)
+            raise err
 
         return result.stdout
 
