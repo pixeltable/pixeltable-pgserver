@@ -26,7 +26,7 @@ jobs:
           #   arch: x86_64
           - os: ubuntu-20.04 # for testing
             arch: x86_64
-          - os: windows-latest
+          - os: windows-2022-16core #TODO revert to windows-latest
             arch: AMD64
     steps:
       - uses: actions/checkout@v4
