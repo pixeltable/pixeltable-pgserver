@@ -8,8 +8,8 @@ import os
 import logging
 import hashlib
 import socket
-import time
-from ._commands import initdb, pg_ctl, pg_bin
+
+from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl, ensure_path_permissions
 from .shared import PostmasterInfo, _process_is_running
 
 __all__ = ['get_server']
@@ -66,6 +66,7 @@ def socket_name_length_ok(socket_name : Path):
         socket_name.unlink(missing_ok=True)
 
 
+
 class PostgresServer:
     """ Provides a common interface for interacting with a server.
     """
@@ -77,7 +78,9 @@ class PostgresServer:
     # lockfile for whole class
     # home dir does not always support locking (eg some clusters)
     runtime_path : Path = platformdirs.user_runtime_path('python_PostgresServer')
-    _lock  = fasteners.InterProcessLock(platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile')
+    lock_path = platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile'
+    _lock  = fasteners.InterProcessLock(lock_path)
+#    lock_path.chmod(0o777) # allow all users to lock unlock for case with sudo
 
 
     def __init__(self, pgdata : Path, *, cleanup_mode : Optional[str] = 'stop'):
@@ -88,12 +91,21 @@ class PostgresServer:
 
         self.pgdata = pgdata
         self.log = self.pgdata / 'log'
-        self.user = "postgres"
-        self.handle_pids = _DiskList(self.pgdata / '.handle_pids.json')
+
+        # postgres user name, NB not the same as system user name
+        self.postgres_user = "postgres"
+
+        list_path = self.pgdata / '.handle_pids.json'
+        self.global_process_id_list = _DiskList(list_path)
+#        ensure_path_permissions(self.global_process_id_list.path, 'pgserver')
+#        self.global_process_id_list.path.chown
+
         self.cleanup_mode = cleanup_mode
 
         self._postmaster_info : Optional[PostmasterInfo] = None
         self._count = 0
+
+
         atexit.register(self._cleanup)
         self._init_server()
 
@@ -153,9 +165,9 @@ class PostgresServer:
         """ Returns a connection string for the postgresql server.
         """
         if database is None:
-            database = self.user
+            database = self.postgres_user
 
-        return f"postgresql://{self.user}:@/{database}?host={self.get_socket_dir()}"
+        return f"postgresql://{self.postgres_user}:@/{database}?host={self.get_socket_dir()}"
 
     def _init_server(self) -> None:
         """ Starts the postgresql server and registers the shutdown handler.
@@ -165,14 +177,18 @@ class PostgresServer:
             self._instances[self.pgdata] = self
             self.pgdata.mkdir(parents=True, exist_ok=True)
 
+
             if not (self.pgdata / 'PG_VERSION').exists():
-                initdb(f"-D {self.pgdata} --auth=trust --auth-local=trust -U {self.user}")
+                initdb(['--auth=trust',  '--auth-local=trust',  '-U', self.postgres_user], pgdata=self.pgdata)
 
             self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
             if self._postmaster_info is None:
                 socket_dir = self._find_suitable_socket_dir()
+                # test this would fix the problem
+                ensure_path_permissions(socket_dir, 'pgserver')
                 try:
-                    pg_ctl(f'-D {self.pgdata} -w -o "-k {socket_dir} -h \\"\\"" -l {self.log} start')
+                    pg_ctl(['-w',  '-o',  f'-k {socket_dir} -h \\"\\"', '-l', str(self.log),  'start'],
+                           pgdata=self.pgdata)
                 except subprocess.CalledProcessError as err:
                     logging.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                     raise err
@@ -182,11 +198,11 @@ class PostgresServer:
             assert self._postmaster_info.pid is not None
             assert self._postmaster_info.socket_dir is not None
 
-            self.handle_pids.get_and_add(os.getpid())
+            self.global_process_id_list.get_and_add(os.getpid())
 
     def _cleanup(self) -> None:
         with self._lock:
-            pids = self.handle_pids.get_and_remove(os.getpid())
+            pids = self.global_process_id_list.get_and_remove(os.getpid())
 
             if pids != [os.getpid()]: # includes case where already cleaned up
                 return
@@ -198,7 +214,7 @@ class PostgresServer:
             assert self.cleanup_mode in ['stop', 'delete']
             if _process_is_running(self._postmaster_info.pid):
                 try:
-                    pg_ctl(f"-D {self.pgdata} -w stop")
+                    pg_ctl(['-w', 'stop'], pgdata=self.pgdata)
                 except subprocess.CalledProcessError:
                     pass # somehow the server is already stopped.
 
@@ -212,7 +228,7 @@ class PostgresServer:
     def psql(self, command : str) -> str:
         """ Runs a psql command on this server. The command is passed to psql via stdin.
         """
-        executable = pg_bin / 'psql'
+        executable = POSTGRES_BIN_PATH / 'psql'
         stdout = subprocess.check_output(f'{executable} {self.get_uri()}',
                                          input=command.encode(), shell=True)
         return stdout.decode("utf-8")

@@ -23,7 +23,7 @@ def _kill_server(pid : Optional[int]) -> None:
         return
     subprocess.run(["kill", "-9", str(pid)])
 
-def test_cleanup_default():
+def test_get_server():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
         try:
@@ -173,6 +173,8 @@ def test_reuse_deleted_datadir():
 
     for prefix in prefixes:
         with tempfile.TemporaryDirectory(dir='/tmp/', prefix=prefix) as tmpdir:
+            orig_pid = None
+            new_pid = None
             try:
                 pgdata = Path(tmpdir) / 'pgdata'
                 with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
