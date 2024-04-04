@@ -8,12 +8,13 @@ import os
 import logging
 import hashlib
 import socket
+import pwd
 
-from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl, ensure_path_permissions
+from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl, ensure_prefix_permissions, ensure_user_exists
 from .shared import PostmasterInfo, _process_is_running
 
-__all__ = ['get_server']
 
+__all__ = ['get_server']
 
 class _DiskList:
     """ A list of integers stored in a file on disk.
@@ -80,8 +81,6 @@ class PostgresServer:
     runtime_path : Path = platformdirs.user_runtime_path('python_PostgresServer')
     lock_path = platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile'
     _lock  = fasteners.InterProcessLock(lock_path)
-#    lock_path.chmod(0o777) # allow all users to lock unlock for case with sudo
-
 
     def __init__(self, pgdata : Path, *, cleanup_mode : Optional[str] = 'stop'):
         """ Initializes the postgresql server instance.
@@ -93,18 +92,19 @@ class PostgresServer:
         self.log = self.pgdata / 'log'
 
         # postgres user name, NB not the same as system user name
-        self.postgres_user = "postgres"
+        self.system_user = None
+        if os.geteuid() == 0:
+            # running as root
+            # need a different system user to run as
+            self.system_user = 'pgserver'
+            ensure_user_exists(self.system_user)
 
+        self.postgres_user = "postgres"
         list_path = self.pgdata / '.handle_pids.json'
         self.global_process_id_list = _DiskList(list_path)
-#        ensure_path_permissions(self.global_process_id_list.path, 'pgserver')
-#        self.global_process_id_list.path.chown
-
         self.cleanup_mode = cleanup_mode
-
         self._postmaster_info : Optional[PostmasterInfo] = None
         self._count = 0
-
 
         atexit.register(self._cleanup)
         self._init_server()
@@ -175,20 +175,26 @@ class PostgresServer:
         """
         with self._lock:
             self._instances[self.pgdata] = self
-            self.pgdata.mkdir(parents=True, exist_ok=True)
 
+            if self.system_user is not None:
+                ensure_prefix_permissions(self.pgdata)
+                os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid,
+                         pwd.getpwnam(self.system_user).pw_gid)
 
             if not (self.pgdata / 'PG_VERSION').exists():
-                initdb(['--auth=trust',  '--auth-local=trust',  '-U', self.postgres_user], pgdata=self.pgdata)
+                initdb(['--auth=trust',  '--auth-local=trust',  '-U', self.postgres_user], pgdata=self.pgdata,
+                       user=self.system_user)
 
             self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
             if self._postmaster_info is None:
                 socket_dir = self._find_suitable_socket_dir()
-                # test this would fix the problem
-                ensure_path_permissions(socket_dir, 'pgserver')
+                if self.system_user is not None and socket_dir != self.pgdata:
+                    ensure_prefix_permissions(socket_dir)
+                    socket_dir.chmod(0o777)
+
                 try:
                     pg_ctl(['-w',  '-o',  f'-k {socket_dir} -h \\"\\"', '-l', str(self.log),  'start'],
-                           pgdata=self.pgdata)
+                           pgdata=self.pgdata, user=self.system_user)
                 except subprocess.CalledProcessError as err:
                     logging.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                     raise err
@@ -214,7 +220,7 @@ class PostgresServer:
             assert self.cleanup_mode in ['stop', 'delete']
             if _process_is_running(self._postmaster_info.pid):
                 try:
-                    pg_ctl(['-w', 'stop'], pgdata=self.pgdata)
+                    pg_ctl(['-w', 'stop'], pgdata=self.pgdata, user=self.system_user)
                 except subprocess.CalledProcessError:
                     pass # somehow the server is already stopped.
 
@@ -251,7 +257,8 @@ class PostgresServer:
 def get_server(pgdata : Union[Path,str] , cleanup_mode : Optional[str] = 'stop' ) -> PostgresServer:
     """ Returns handle to postgresql server instance for the given pgdata directory.
     Args:
-        pgdata: pddata directory. If the pgdata directory does not exist, it will be created.
+        pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
+        prefix must be a valid directory.
         cleanup_mode: If 'stop', the server will be stopped when the last handle is closed (default)
                         If 'delete', the server will be stopped and the pgdata directory will be deleted.
                         If None, the server will not be stopped or deleted.
@@ -262,6 +269,12 @@ def get_server(pgdata : Union[Path,str] , cleanup_mode : Optional[str] = 'stop' 
     if isinstance(pgdata, str):
         pgdata = Path(pgdata)
     pgdata = pgdata.expanduser().resolve()
+
+    if not pgdata.parent.exists():
+        raise FileNotFoundError(f"Parent directory of pgdata does not exist: {pgdata.parent}")
+
+    if not pgdata.exists():
+        pgdata.mkdir(parents=False, exist_ok=False)
 
     if pgdata in PostgresServer._instances:
         return PostgresServer._instances[pgdata]

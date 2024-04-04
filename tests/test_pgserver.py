@@ -164,32 +164,44 @@ def test_start_failure_log(caplog):
 
         assert 'postgres: could not access the server configuration file' in caplog.text
 
-def test_reuse_deleted_datadir():
+def _reuse_deleted_datadir(prefix):
     """ test that new server starts normally on same datadir after datadir is deleted
     """
-    long_prefix = '_'.join(['long'] + ['1234567890']*12)
+    tmpdir = tempfile.mkdtemp(prefix=prefix)
+    orig_pid = None
+    new_pid = None
+    try:
+        pgdata = Path(tmpdir) / 'pgdata'
+        with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
+            orig_pid = _check_server_works(pg)
+
+        shutil.rmtree(pgdata)
+        assert not pgdata.exists()
+        # TODO: why does the test fail in some environments if I dont kill the old server here?
+        # if the directory is new, why does it somehow conflict with the old server
+        _kill_server(orig_pid)
+
+        # starting the server on same dir should work
+        with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
+            new_pid = _check_server_works(pg)
+            assert orig_pid != new_pid
+    finally:
+        _kill_server(orig_pid)
+        _kill_server(new_pid)
+
+    shutil.rmtree(tmpdir)
+
+def test_reuse_deleted_datadir_short():
+    """ test that new server starts normally on same datadir after datadir is deleted
+    """
+    _reuse_deleted_datadir('short_prefix')
+
+def test_reuse_deleted_datadir_long():
+    """ test that new server starts normally on same datadir after datadir is deleted
+    """
+    long_prefix = '_'.join(['long_prefix'] + ['1234567890']*12)
     assert len(long_prefix) > 120
-    prefixes = ['short', long_prefix]
-
-    for prefix in prefixes:
-        with tempfile.TemporaryDirectory(dir='/tmp/', prefix=prefix) as tmpdir:
-            orig_pid = None
-            new_pid = None
-            try:
-                pgdata = Path(tmpdir) / 'pgdata'
-                with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
-                    orig_pid = _check_server_works(pg)
-
-                shutil.rmtree(pgdata)
-
-                # starting the server on same dir should work
-                with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
-                    new_pid = _check_server_works(pg)
-                    assert orig_pid != new_pid
-
-            finally:
-                _kill_server(orig_pid)
-                _kill_server(new_pid)
+    _reuse_deleted_datadir(long_prefix)
 
 @pytest.mark.skip(reason="run locally only (needs dep)")
 def test_uri_string(tmp_postgres):

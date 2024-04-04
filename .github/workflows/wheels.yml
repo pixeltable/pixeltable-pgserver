@@ -33,15 +33,15 @@ jobs:
         if: matrix.os == 'ubuntu-20.04'
           # for testing due to docker env issues
         with:
-          python-version: '3.8'
+          python-version: '3.9'
       - name: Install cibuildwheel
-        run: | 
+        run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade cibuildwheel
       - name: Build wheels
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
-          CIBW_SKIP: pp* *-musllinux*
+          CIBW_SKIP: pp* cp38-* cp312-* *-musllinux*
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v3
         with:
@@ -57,7 +57,7 @@ jobs:
         # test ubuntu outside of cibuildwheel due to postgres root user issues
         run: |
           python -m pip install --upgrade pip pytest
-          python -m pip install --force-reinstall dist/*cp38*manylinux*x86*.whl
+          python -m pip install --force-reinstall dist/*cp39*manylinux*x86*.whl
           pytest ./tests
   publish-to-pypi:
     name: Publish Python dist to PyPI
