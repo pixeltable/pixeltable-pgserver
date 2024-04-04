@@ -24,9 +24,9 @@ jobs:
             arch: arm64
           # - os: macos-latest
           #   arch: x86_64
-          - os: ubuntu-20.04 # for testing
+          - os: ubuntu-latest-4core # for testing
             arch: x86_64
-          - os: windows-2022-16core #TODO revert to windows-latest
+          - os: windows-2022-4core #TODO revert to windows-latest
             arch: AMD64
     steps:
       - uses: actions/checkout@v4

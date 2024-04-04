@@ -8,11 +8,48 @@ import os
 import logging
 import hashlib
 import socket
-import pwd
+import platform
+import stat
 
-from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl, ensure_prefix_permissions, ensure_user_exists
+from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
 from .shared import PostmasterInfo, _process_is_running
 
+
+if platform.system() != 'Windows':
+    import pwd
+    def ensure_user_exists(username : str) -> Optional[pwd.struct_passwd]:
+        """ Ensure system user `username` exists.
+            Returns their pwentry if user exists, otherwise it creates a user through `useradd`.
+            Assume permissions to add users, eg run as root.
+        """
+        try:
+            entry = pwd.getpwnam(username)
+        except KeyError:
+            entry = None
+
+        if entry is None:
+            subprocess.run(["useradd", "-s", "/bin/bash", username], check=True, capture_output=True, text=True)
+            entry = pwd.getpwnam(username)
+
+        return entry
+
+    def ensure_prefix_permissions(path: Path):
+        """ Ensure target user can traverse prefix to path
+            Permissions for everyone will be increased to ensure traversal.
+        """
+        # ensure path exists and user exists
+        assert path.exists()
+        prefix = path.parent
+        # chmod g+rx,o+rx: enable other users to traverse prefix folders
+        g_rx_o_rx = stat.S_IRGRP |  stat.S_IROTH | stat.S_IXGRP | stat.S_IXOTH
+        while True:
+            curr_permissions = prefix.stat().st_mode
+            ensure_permissions = curr_permissions | g_rx_o_rx
+            # TODO: are symlinks handled ok here?
+            prefix.chmod(ensure_permissions)
+            if prefix == prefix.parent: # reached file system root
+                break
+            prefix = prefix.parent
 
 __all__ = ['get_server']
 
@@ -92,7 +129,8 @@ class PostgresServer:
 
         # postgres user name, NB not the same as system user name
         self.system_user = None
-        if os.geteuid() == 0:
+
+        if os.geteuid() == 0 and platform.system() != 'Windows':
             # running as root
             # need a different system user to run as
             self.system_user = 'pgserver'
@@ -175,10 +213,10 @@ class PostgresServer:
         with self._lock:
             self._instances[self.pgdata] = self
 
-            if self.system_user is not None:
+            if self.system_user is not None and platform.system() != 'Windows':
                 ensure_prefix_permissions(self.pgdata)
                 os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid,
-                         pwd.getpwnam(self.system_user).pw_gid)
+                        pwd.getpwnam(self.system_user).pw_gid)
 
             if not (self.pgdata / 'PG_VERSION').exists():
                 initdb(['--auth=trust',  '--auth-local=trust',  '-U', self.postgres_user], pgdata=self.pgdata,

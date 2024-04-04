@@ -2,52 +2,11 @@ from pathlib import Path
 import sys
 import subprocess
 from typing import Optional, List, Callable
-import os
-import pwd
 import pathlib
 import stat
 import logging
 
 POSTGRES_BIN_PATH = Path(__file__).parent / "pginstall" / "bin"
-
-def ensure_prefix_permissions(path: pathlib.Path):
-  """ Ensure target user can traverse prefix to path
-      Permissions for everyone will be increased to ensure traversal.
-  """
-
-  # ensure path exists and user exists
-  assert path.exists()
-
-  prefix = path.parent
-
-  # chmod g+rx,o+rx: enable other users to traverse prefix folders
-  g_rx_o_rx = stat.S_IRGRP |  stat.S_IROTH | stat.S_IXGRP | stat.S_IXOTH
-  while True:
-    curr_permissions = prefix.stat().st_mode
-    ensure_permissions = curr_permissions | g_rx_o_rx
-    # TODO: are symlinks handled ok here?
-    prefix.chmod(ensure_permissions)
-
-    if prefix == prefix.parent:
-      # reached file system root
-      break
-    prefix = prefix.parent
-
-def ensure_user_exists(username : str) -> pwd.struct_passwd:
-  """ Ensure system user `username` exists.
-      Returns their pwentry if user exists, otherwise it creates a user through `useradd`.
-      Assume permissions to add users, eg run as root.
-  """
-  try:
-    entry = pwd.getpwnam(username)
-  except KeyError as e:
-    entry = None
-
-  if entry is None:
-    subprocess.run(["useradd", "-s", "/bin/bash", username], check=True, capture_output=True, text=True)
-    entry = pwd.getpwnam(username)
-
-  return entry
 
 def create_command_function(pg_exe_name : str) -> Callable:
     def command(args : List[str], pgdata : Optional[Path] = None, user : Optional[str] = None) -> str:
