@@ -175,7 +175,8 @@ def test_start_failure_log(caplog):
         assert 'postgres: could not access the server configuration file' in caplog.text
 
 def _reuse_deleted_datadir(prefix):
-    """ test that new server starts normally on same datadir after datadir is deleted
+    """ test that new server starts normally on new datadir with a re-used name,
+          after datadir is deleted
     """
     tmpdir = tempfile.mkdtemp(prefix=prefix)
     orig_pid = None
@@ -187,9 +188,6 @@ def _reuse_deleted_datadir(prefix):
 
         shutil.rmtree(pgdata)
         assert not pgdata.exists()
-        # # TODO: why does the test fail in some environments if I dont kill the old server here?
-        # # if the directory is new, why does it somehow conflict with the old server
-        # _kill_server(orig_pid)
 
         # starting the server on same dir should work
         with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
@@ -204,10 +202,14 @@ def _reuse_deleted_datadir(prefix):
 def test_no_conflict():
     """ test we can start pgservers on two different datadirs with no conflict (eg port conflict)
     """
-    with tempfile.TemporaryDirectory() as tmpdir1, tempfile.TemporaryDirectory() as tmpdir2:
-        with pgserver.get_server(tmpdir1) as pg1, pgserver.get_server(tmpdir2) as pg2:
-            pid1 = _check_server_works(pg1)
-            pid2 = _check_server_works(pg2)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir1, tempfile.TemporaryDirectory() as tmpdir2:
+            with pgserver.get_server(tmpdir1) as pg1, pgserver.get_server(tmpdir2) as pg2:
+                pid1 = _check_server_works(pg1)
+                pid2 = _check_server_works(pg2)
+    finally:
+        _kill_server(pid1)
+        _kill_server(pid2)
 
 
 def test_reuse_deleted_datadir_short():
