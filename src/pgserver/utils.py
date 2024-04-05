@@ -156,8 +156,10 @@ def find_suitable_socket_dir(pgdata, runtime_path) -> Path:
 
     return ok_path
 
-def find_suitable_port(address : str) -> int:
+def find_suitable_port(address : Optional[str] = None) -> int:
     """Find an available TCP port."""
+    if address is None:
+        address = '127.0.0.1'
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind((address, 0))
     port = sock.getsockname()[1]
