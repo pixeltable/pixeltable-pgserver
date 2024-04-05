@@ -43,10 +43,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade cibuildwheel
-      - name: Cache pginstall
+      - name: Restore postgres build from cache
+        id: restore-postgres
+        uses: actions/cache/restore@v3
+        env:
+          cache-name: cache-postgres
+        with:
+          path: |
+            pgbuild
+            src/pgserver/pginstall
+          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{ hashFiles('Makefile', 'pgbuild/Makefile') }}
+      - name: Save postgres build
         id: cache-postgres
-        uses: actions/cache@v4
-        save-always: true
+        uses: actions/cache/save@v3
         env:
           cache-name: cache-postgres
         with:
