@@ -8,7 +8,7 @@ import logging
 import platform
 
 from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
-from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, PostmasterInfo
+from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, PostmasterInfo, process_is_running
 
 if platform.system() != 'Windows':
     from .utils import ensure_user_exists, ensure_prefix_permissions
@@ -21,8 +21,8 @@ class PostgresServer:
 
     _instances : Dict[Path, 'PostgresServer'] = {}
 
-    # lockfile for whole class
-    # home dir does not always support locking (eg some clusters)
+    # NB home does not always support locking, eg NFS or LUSTRE (eg some clusters)
+    # so, use user_runtime_path instead, which seems to be in a local filesystem
     runtime_path : Path = platformdirs.user_runtime_path('python_PostgresServer')
     lock_path = platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile'
     _lock  = fasteners.InterProcessLock(lock_path)
@@ -88,6 +88,7 @@ class PostgresServer:
         """ Initializes the pgdata directory if it is not already initialized.
         """
         if platform.system() != 'Windows' and os.geteuid() == 0:
+            import pwd
             assert self.system_user is not None
             ensure_prefix_permissions(self.pgdata)
             os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid,
@@ -112,25 +113,30 @@ class PostgresServer:
                     socket_dir.chmod(0o777)
 
                 pg_ctl_args = ['-w',  # wait for server to start
-                        '-o',  f'-k {socket_dir}', # socket option (forwarded to postgres exec) see man postgres for -k
                         '-o', '-h ""',  # no listening on any IP addresses (forwarded to postgres exec) see man postgres for -hj
-                        '-l', str(self.log),   # log location: set to pgdata dir also
+                        '-o',  f'-k {socket_dir}', # socket option (forwarded to postgres exec) see man postgres for -k
+                        '-l', str(self.log), # log location: set to pgdata dir also
                         'start' # action
                 ]
             else: # Windows,
                 # socket.AF_UNIX is undefined when running on Windows, so default to a port
-                port = find_suitable_port()
+                host = "127.0.0.1"
+                port = find_suitable_port(host)
                 pg_ctl_args = ['-w',  # wait for server to start
-                        '-o', f'-h 127.0.0.1 -p {port}',
-                        '-l', str(self.log),   # log location: set to pgdata dir also
+                        '-o', f'-h "{host}"',
+                        '-o', f'-p {port}',
+                        '-l', str(self.log), # log location: set to pgdata dir also
                         'start' # action
                 ]
 
             try:
-                # -o to pg_ctl are options to be passed directly to the postgres executable, be wary of quotes (man pg_ctl)
-                pg_ctl(pg_ctl_args,pgdata=self.pgdata, user=self.system_user)
+                logging.info('About to call pg_ctl: ' + ' '.join(pg_ctl_args))
+                pg_ctl(pg_ctl_args,pgdata=self.pgdata, user=self.system_user, timeout=10)
             except subprocess.CalledProcessError as err:
                 logging.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
+                raise err
+            except subprocess.TimeoutExpired as err:
+                logging.error(f"Timeout starting server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                 raise err
 
         self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
@@ -150,7 +156,7 @@ class PostgresServer:
                 return
 
             assert self.cleanup_mode in ['stop', 'delete']
-            if _process_is_running(self._postmaster_info.pid):
+            if process_is_running(self._postmaster_info.pid):
                 try:
                     pg_ctl(['-w', 'stop'], pgdata=self.pgdata, user=self.system_user)
                 except subprocess.CalledProcessError:
@@ -190,7 +196,7 @@ def get_server(pgdata : Union[Path,str] , cleanup_mode : Optional[str] = 'stop' 
     """ Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
-        prefix must be a valid directory.
+        parent must exists and be a valid directory.
         cleanup_mode: If 'stop', the server will be stopped when the last handle is closed (default)
                         If 'delete', the server will be stopped and the pgdata directory will be deleted.
                         If None, the server will not be stopped or deleted.

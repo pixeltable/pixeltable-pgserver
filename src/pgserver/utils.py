@@ -34,6 +34,14 @@ class PostmasterInfo:
 if platform.system() != 'Windows' and typing.TYPE_CHECKING:
     import pwd
 
+def process_is_running(pid : int) -> bool:
+    assert pid is not None
+    try:
+        subprocess.run(["kill", "-0", str(pid)], check=True)
+        return True
+    except subprocess.CalledProcessError:
+        pass
+    return False
 
 if platform.system() != 'Windows':
     def ensure_user_exists(username : str) -> Optional['pwd.struct_passwd']:
@@ -165,19 +173,6 @@ def find_suitable_port(address : Optional[str] = None) -> int:
     port = sock.getsockname()[1]
     sock.close()
     return port
-
-def test_port(address : str, port : int) -> None:
-    """ Test if a port is in use.
-    """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind((address, port))
-    except OSError as err:
-        if 'Address already in use' in str(err):
-            raise RuntimeError(f"Port {port} is already in use.")
-        raise err
-    finally:
-        sock.close()
 
 
 __all__ = ['get_server']

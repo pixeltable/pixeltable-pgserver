@@ -8,15 +8,8 @@ import shutil
 import time
 from pathlib import Path
 import pgserver.utils
-
-def _process_is_running(pid : int) -> bool:
-    assert pid is not None
-    try:
-        subprocess.run(["kill", "-0", str(pid)], check=True)
-        return True
-    except subprocess.CalledProcessError:
-        pass
-    return False
+import socket
+from pgserver.utils import find_suitable_port, process_is_running
 
 def _check_server_works(pg : pgserver.PostgresServer) -> int:
     assert pg.pgdata.exists()
@@ -31,6 +24,21 @@ def _kill_server(pid : Optional[int]) -> None:
         return
     subprocess.run(["kill", "-9", str(pid)])
 
+def test_get_port():
+    address = '127.0.0.1'
+    port = find_suitable_port(address)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        sock.bind((address, port))
+    except OSError as err:
+        if 'Address already in use' in str(err):
+            raise RuntimeError(f"Port {port} is already in use.")
+        raise err
+    finally:
+        sock.close()
+
+
 def test_get_server():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -39,14 +47,14 @@ def test_get_server():
             with pgserver.get_server(tmpdir) as pg:
                 pid = _check_server_works(pg)
 
-            assert not _process_is_running(pid)
+            assert not process_is_running(pid)
             assert pg.pgdata.exists()
 
             # check case when pgdata dir is already initialized
             with pgserver.get_server(tmpdir) as pg:
                 pid = _check_server_works(pg)
 
-            assert not _process_is_running(pid)
+            assert not process_is_running(pid)
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -64,7 +72,7 @@ def test_reentrant():
 
                 _check_server_works(pg)
 
-            assert not _process_is_running(pid)
+            assert not process_is_running(pid)
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -89,7 +97,7 @@ def test_dir_length():
                 with pgserver.get_server(tmpdir) as pg:
                     pid = _check_server_works(pg)
 
-                assert not _process_is_running(pid)
+                assert not process_is_running(pid)
                 assert pg.pgdata.exists()
                 if len(prefix) > 120:
                     assert str(tmpdir) not in pg.get_uri()
@@ -105,7 +113,7 @@ def test_cleanup_delete():
             with pgserver.get_server(tmpdir, cleanup_mode='delete') as pg:
                 pid = _check_server_works(pg)
 
-            assert not _process_is_running(pid)
+            assert not process_is_running(pid)
             assert not pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -117,7 +125,7 @@ def test_cleanup_none():
             with pgserver.get_server(tmpdir, cleanup_mode=None) as pg:
                 pid = _check_server_works(pg)
 
-            assert _process_is_running(pid)
+            assert process_is_running(pid)
             assert pg.pgdata.exists()
         finally:
             _kill_server(pid)
@@ -229,7 +237,7 @@ def test_multiprocess_shared():
                 # check server still works
                 _check_server_works(pg)
 
-            assert not _process_is_running(server_pid_parent)
+            assert not process_is_running(server_pid_parent)
     finally:
         _kill_server(pid)
 
@@ -252,7 +260,7 @@ def test_delete_pgdata_cleanup(tmp_postgres):
     assert tmp_postgres.pgdata.exists()
     pid =  tmp_postgres.get_pid()
     assert pid is not None
-    assert _process_is_running(pid)
+    assert process_is_running(pid)
 
     # external deletion of pgdata should stop server
     shutil.rmtree(tmp_postgres.pgdata)
@@ -260,7 +268,7 @@ def test_delete_pgdata_cleanup(tmp_postgres):
     # wait for server to stop
     for _ in range(20): # wait at most 3 seconds.
         time.sleep(.2)
-        if not _process_is_running(pid):
+        if not process_is_running(pid):
             break
 
-    assert not _process_is_running(pid)
+    assert not process_is_running(pid)

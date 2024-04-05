@@ -7,7 +7,7 @@ import logging
 POSTGRES_BIN_PATH = Path(__file__).parent / "pginstall" / "bin"
 
 def create_command_function(pg_exe_name : str) -> Callable:
-    def command(args : List[str], pgdata : Optional[Path] = None, user : Optional[str] = None) -> str:
+    def command(args : List[str], pgdata : Optional[Path] = None, **kwargs) -> str:
         """
             Run a command with the given command line arguments.
             Args:
@@ -15,7 +15,7 @@ def create_command_function(pg_exe_name : str) -> Callable:
                 a list of options as would be passed to `subprocess.run`
                 pgdata: The path to the data directory to use for the command.
                     If the command does not need a data directory, this should be None.
-                user: The user to run the command as. If None, the current user is used.
+                kwargs: Additional keyword arguments to pass to `subprocess.run`, eg user, timeout.
 
             Returns:
                 The stdout of the command as a string.
@@ -30,12 +30,12 @@ def create_command_function(pg_exe_name : str) -> Callable:
 
         try:
             result = subprocess.run(full_command_line, check=True, capture_output=True, text=True,
-                                    user=user)
-            logging.info("Successful postgres command %s as user `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
-                         result.args, user, result.stdout, result.stderr)
+                                    **kwargs)
+            logging.info("Successful postgres command %s with kwargs: `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
+                         result.args, kwargs, result.stdout, result.stderr)
         except subprocess.CalledProcessError as err:
-            logging.error("Failed postgres command %s as user `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
-                          err.args, user, str(err), err.stdout, err.stderr)
+            logging.error("Failed postgres command %s with kwargs: `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
+                          err.args, kwargs, str(err), err.stdout, err.stderr)
             raise err
 
         return result.stdout
