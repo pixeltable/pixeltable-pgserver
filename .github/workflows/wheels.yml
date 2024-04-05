@@ -45,11 +45,14 @@ jobs:
           python -m pip install --upgrade cibuildwheel
       - name: Cache pginstall
         id: cache-postgres
-        uses: actions/cache@v3
+        uses: actions/cache@v4
+        save-always: true
         env:
           cache-name: cache-postgres
         with:
-          path: src/pgserver/pginstall
+          path: |
+           pgbuild
+           src/pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{ hashFiles('Makefile', 'pgbuild/Makefile') }}
       - name: Build wheels
         env:
