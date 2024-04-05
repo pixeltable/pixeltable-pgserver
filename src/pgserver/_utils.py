@@ -130,7 +130,8 @@ class PostgresServer:
         # postgres user name, NB not the same as system user name
         self.system_user = None
 
-        if os.geteuid() == 0 and platform.system() != 'Windows':
+        # note os.geteuid() is not available on windows, so must go after
+        if platform.system() != 'Windows' and os.geteuid() == 0:
             # running as root
             # need a different system user to run as
             self.system_user = 'pgserver'
