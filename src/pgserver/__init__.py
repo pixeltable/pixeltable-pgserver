@@ -1,3 +1,2 @@
 from ._commands import *
-from ._utils import *
-from ._utils import PostgresServer
+from .postgres_server import PostgresServer, get_server

@@ -7,8 +7,16 @@ import multiprocessing as mp
 import shutil
 import time
 from pathlib import Path
-from pgserver.shared  import _process_is_running
+import pgserver.utils
 
+def _process_is_running(pid : int) -> bool:
+    assert pid is not None
+    try:
+        subprocess.run(["kill", "-0", str(pid)], check=True)
+        return True
+    except subprocess.CalledProcessError:
+        pass
+    return False
 
 def _check_server_works(pg : pgserver.PostgresServer) -> int:
     assert pg.pgdata.exists()

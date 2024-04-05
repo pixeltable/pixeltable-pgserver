@@ -2,8 +2,6 @@ from pathlib import Path
 import sys
 import subprocess
 from typing import Optional, List, Callable
-import pathlib
-import stat
 import logging
 
 POSTGRES_BIN_PATH = Path(__file__).parent / "pginstall" / "bin"
@@ -53,6 +51,5 @@ def _init():
         function_name = exe_name.strip('.exe')
         setattr(sys.modules[__name__], function_name, prog)
         __all__.append(function_name)
-
 
 _init()
