@@ -17,14 +17,17 @@ $(POSTGRES_DIR): $(POSTGRES_DIR).tar.gz
 	tar xzf $(POSTGRES_DIR).tar.gz
 	touch $(POSTGRES_DIR)
 
+$(POSTGRES_DIR)/config.status: $(POSTGRES_DIR)
+	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
+		&& ./configure --prefix=$(PREFIX) --without-readline
+
 $(PREFIX):
 	mkdir -p $(PREFIX)
 
 #https://stackoverflow.com/questions/68379786/
 #for explanation of unsetting make env variables prior to calling postgres' own make
-$(PREFIX)/bin/postgres: $(POSTGRES_DIR) $(PREFIX)
+$(PREFIX)/bin/postgres: $(POSTGRES_DIR)/config.status $(PREFIX)
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
-		&& ./configure --prefix=$(PREFIX) --without-readline \
 		&& $(MAKE) -j \
 		&& $(MAKE) install
 
