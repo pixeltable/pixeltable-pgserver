@@ -130,7 +130,6 @@ class PostgresServer:
                 ]
 
             try:
-                logging.info('About to call pg_ctl: ' + ' '.join(pg_ctl_args))
                 pg_ctl(pg_ctl_args,pgdata=self.pgdata, user=self.system_user, timeout=10)
             except subprocess.CalledProcessError as err:
                 logging.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")

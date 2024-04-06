@@ -29,6 +29,7 @@ def create_command_function(pg_exe_name : str) -> Callable:
         full_command_line = [str(POSTGRES_BIN_PATH / pg_exe_name)] + args
 
         try:
+            logging.info("Running commandline:\n%s\nwith kwargs: `%s`", full_command_line, kwargs)
             result = subprocess.run(full_command_line, check=True, capture_output=True, text=True,
                                     **kwargs)
             logging.info("Successful postgres command %s with kwargs: `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
