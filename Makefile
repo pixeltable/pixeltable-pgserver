@@ -2,11 +2,11 @@
 .PHONY: build wheel install-wheel install-dev clean test
 
 build:
-	$(MAKE) -C pgbuild all
+	$(MAKE) -d -C pgbuild all
 
 wheel: build
 	python setup.py bdist_wheel
-	
+
 install-wheel: wheel
 	python -m pip install --force-reinstall dist/*.whl
 
