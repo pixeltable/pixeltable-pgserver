@@ -11,6 +11,7 @@ import pgserver.utils
 import socket
 from pgserver.utils import find_suitable_port, process_is_running
 import psutil
+import platform
 
 def _check_server_works(pg : pgserver.PostgresServer) -> int:
     assert pg.pgdata.exists()
@@ -90,26 +91,31 @@ def _start_and_wait(tmpdir, queue_in, queue_out):
         # now wait for parent to tell us to exit
         _ = queue_in.get()
 
-def test_dir_length():
-    long_prefix = '_'.join(['long'] + ['1234567890']*12)
-    assert len(long_prefix) > 120
-    prefixes = ['short', long_prefix]
+if platform.system() != 'Windows':
+    """ This test is for unix socket domain path length issues,
+        and relies on using /tmp/ as the temporary directory to ensure short paths
+        (unlike those used by pytest).
+    """
+    def test_dir_length():
+        long_prefix = '_'.join(['long'] + ['1234567890']*12)
+        assert len(long_prefix) > 120
+        prefixes = ['short', long_prefix]
 
-    for prefix in prefixes:
-        with tempfile.TemporaryDirectory(dir='/tmp/', prefix=prefix) as tmpdir:
-            pid = None
-            try:
-                with pgserver.get_server(tmpdir) as pg:
-                    pid = _check_server_works(pg)
+        for prefix in prefixes:
+            with tempfile.TemporaryDirectory(dir='/tmp/', prefix=prefix) as tmpdir:
+                pid = None
+                try:
+                    with pgserver.get_server(tmpdir) as pg:
+                        pid = _check_server_works(pg)
 
-                assert not process_is_running(pid)
-                assert pg.pgdata.exists()
-                if len(prefix) > 120:
-                    assert str(tmpdir) not in pg.get_uri()
-                else:
-                    assert str(tmpdir) in pg.get_uri()
-            finally:
-                _kill_server(pid)
+                    assert not process_is_running(pid)
+                    assert pg.pgdata.exists()
+                    if len(prefix) > 120:
+                        assert str(tmpdir) not in pg.get_uri()
+                    else:
+                        assert str(tmpdir) in pg.get_uri()
+                finally:
+                    _kill_server(pid)
 
 def test_cleanup_delete():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -143,7 +149,7 @@ def tmp_postgres():
 
 def test_pgvector(tmp_postgres):
     ret = tmp_postgres.psql("CREATE EXTENSION vector;")
-    assert ret == "CREATE EXTENSION\n"
+    assert ret.strip() == "CREATE EXTENSION"
 
 def test_start_failure_log(caplog):
     """ Test server log contents are shown in python log when failures
@@ -173,6 +179,10 @@ def _reuse_deleted_datadir(prefix):
         pgdata = Path(tmpdir) / 'pgdata'
         with pgserver.get_server(pgdata, cleanup_mode=None) as pg:
             orig_pid = _check_server_works(pg)
+
+        if platform.system() == 'Windows':
+            # windows will not allow deletion of the directory while the server is running
+            _kill_server(orig_pid)
 
         shutil.rmtree(pgdata)
         assert not pgdata.exists()
