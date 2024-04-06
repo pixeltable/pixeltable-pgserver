@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - testing
+      - main
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
@@ -20,13 +21,13 @@ jobs:
           # (like pg_config), which would have been cross-compiled and cannot run on the host
           # to keep things simple just build on the -xlarge instance, which is arm64.exclude:
           # ubuntu arm64 may have similar issues (but useful for newer aws machines)
-          # - os: macos-latest-xlarge
-          #   arch: arm64
-          # - os: macos-latest
-          #   arch: x86_64
-          # - os: ubuntu-latest # for testing
-          #   arch: x86_64
-          - os: windows-latest #TODO revert to windows-latest
+          - os: macos-latest-xlarge
+            arch: arm64
+          - os: macos-latest
+            arch: x86_64
+          - os: ubuntu-latest # for testing
+            arch: x86_64
+          - os: windows-latest
             arch: AMD64
     steps:
       - uses: actions/checkout@v4

@@ -14,21 +14,26 @@ POSTGRES_BLD := $(POSTGRES_SRC)-build
 $(POSTGRES_SRC).tar.gz:
 	curl -L -O $(POSTGRES_URL)
 
+## extract
 $(POSTGRES_SRC)/configure: $(POSTGRES_SRC).tar.gz
 	tar xzf $(POSTGRES_SRC).tar.gz
 	touch $(POSTGRES_SRC)/configure
 
+## configure
 $(POSTGRES_BLD)/config.status: $(POSTGRES_SRC)/configure
 	mkdir -p $(POSTGRES_BLD)
 	cd $(POSTGRES_BLD) && ../$(POSTGRES_SRC)/configure --prefix=$(INSTALL_PREFIX) --without-readline
 
-#https://stackoverflow.com/questions/68379786/
-#for explanation of unsetting make env variables prior to calling postgres' own make
+## build
+# https://stackoverflow.com/questions/68379786/
+# for explanation of unsetting make env variables prior to calling postgres' own make
+$(POSTGRES_BLD)/src/bin/initdb/initdb: $(POSTGRES_BLD)/config.status
+	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && $(MAKE) -C $(POSTGRES_BLD) -j
+
+## install to INSTALL_PREFIX
 $(INSTALL_PREFIX)/bin/postgres: $(POSTGRES_BLD)/config.status
 	mkdir -p $(INSTALL_PREFIX)
-	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_BLD) \
-		&& $(MAKE) -j \
-		&& $(MAKE) install
+	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && $(MAKE) -C $(POSTGRES_BLD) install
 
 .PHONY: postgres
 postgres: $(INSTALL_PREFIX)/bin/postgres
@@ -48,10 +53,10 @@ $(PGVECTOR_DIR)/Makefile: $(PGVECTOR_DIR).tar.gz
 	touch $(PGVECTOR_DIR)/Makefile
 
 $(INSTALL_PREFIX)/lib/vector.so: $(PGVECTOR_DIR)/Makefile $(INSTALL_PREFIX)/bin/postgres
-	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(PGVECTOR_DIR) \
+	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS \
 		&& export PG_CONFIG=$(INSTALL_PREFIX)/bin/pg_config \
-		&& $(MAKE) -j \
-		&& $(MAKE) install
+		&& $(MAKE) -C $(PGVECTOR_DIR) -j \
+		&& $(MAKE) -C $(PGVECTOR_DIR) install
 
 .PHONY: pgvector
 pgvector: postgres $(INSTALL_PREFIX)/lib/vector.so
