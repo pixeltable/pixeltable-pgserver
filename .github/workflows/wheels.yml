@@ -54,6 +54,7 @@ jobs:
             src/pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{ hashFiles('Makefile', 'pgbuild/Makefile') }}
       - name: Build postgres and pgvector
+        if: steps.restore-postgres.outputs.cache-hit != 'true'
         # this step is implied by Build wheels, but we do it here for caching before python tests run
         run: make
       - name: Save postgres build
