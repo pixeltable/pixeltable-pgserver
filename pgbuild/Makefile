@@ -9,7 +9,7 @@ all: pgvector postgres
 POSTGRES_VERSION := 15.5
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
 POSTGRES_SRC := postgresql-$(POSTGRES_VERSION)
-POSTGRES_BLD := $(POSTGRES_SRC)-build
+POSTGRES_BLD := $(POSTGRES_SRC)
 
 $(POSTGRES_SRC).tar.gz:
 	curl -L -O $(POSTGRES_URL)
