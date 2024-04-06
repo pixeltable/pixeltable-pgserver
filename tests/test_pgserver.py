@@ -10,19 +10,24 @@ from pathlib import Path
 import pgserver.utils
 import socket
 from pgserver.utils import find_suitable_port, process_is_running
+import psutil
 
 def _check_server_works(pg : pgserver.PostgresServer) -> int:
     assert pg.pgdata.exists()
     pid = pg.get_pid()
     assert pid is not None
     ret = pg.psql("show data_directory;")
-    assert str(pg.pgdata) in ret
+
+    # parse second row (first two are headers)
+    ret_path = Path(ret.splitlines()[2].strip())
+    assert pg.pgdata == ret_path
     return pid
 
 def _kill_server(pid : Optional[int]) -> None:
     if pid is None:
         return
-    subprocess.run(["kill", "-9", str(pid)])
+    if psutil.pid_exists(pid):
+        psutil.Process(pid).kill()
 
 def test_get_port():
     address = '127.0.0.1'

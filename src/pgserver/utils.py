@@ -8,11 +8,12 @@ import hashlib
 import socket
 import platform
 import stat
+import psutil
 
 class PostmasterInfo:
     """Struct with contents of the PGDATA/postmaster.pid file, contains information about the running server.
     Example of file contents: (comments added for clarity)
-    cat /Users/orm/Library/Application\ Support/Postgres/var-15/postmaster.pid
+    cat /Users/orm/Library/Application Support/Postgres/var-15/postmaster.pid
         ```
         3072        # pid
         /Users/orm/Library/Application Support/Postgres/var-15 # pgdata
@@ -53,12 +54,7 @@ if platform.system() != 'Windows' and typing.TYPE_CHECKING:
 
 def process_is_running(pid : int) -> bool:
     assert pid is not None
-    try:
-        subprocess.run(["kill", "-0", str(pid)], check=True)
-        return True
-    except subprocess.CalledProcessError:
-        pass
-    return False
+    return psutil.pid_exists(pid)
 
 if platform.system() != 'Windows':
     def ensure_user_exists(username : str) -> Optional['pwd.struct_passwd']:
