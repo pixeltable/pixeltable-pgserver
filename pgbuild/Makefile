@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-PREFIX := $(shell pwd)/../src/pgserver/pginstall/
+INSTALL_PREFIX := $(shell pwd)/../src/pgserver/pginstall/
 BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
@@ -8,31 +8,30 @@ all: pgvector postgres
 ### postgres
 POSTGRES_VERSION := 15.5
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
-POSTGRES_DIR := postgresql-$(POSTGRES_VERSION)
+POSTGRES_SRC := postgresql-$(POSTGRES_VERSION)
+POSTGRES_BLD := $(POSTGRES_SRC)-build
 
-$(POSTGRES_DIR).tar.gz:
+$(POSTGRES_SRC).tar.gz:
 	curl -L -O $(POSTGRES_URL)
 
-$(POSTGRES_DIR)/configure: $(POSTGRES_DIR).tar.gz
-	tar xzf $(POSTGRES_DIR).tar.gz
-	touch $(POSTGRES_DIR)/configure
+$(POSTGRES_SRC)/configure: $(POSTGRES_SRC).tar.gz
+	tar xzf $(POSTGRES_SRC).tar.gz
+	touch $(POSTGRES_SRC)/configure
 
-$(POSTGRES_DIR)/config.status: $(POSTGRES_DIR)/configure
-	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
-		&& ./configure --prefix=$(PREFIX) --without-readline
-
-$(PREFIX):
-	mkdir -p $(PREFIX)
+$(POSTGRES_BLD)/config.status: $(POSTGRES_SRC)/configure
+	mkdir -p $(POSTGRES_BLD)
+	cd $(POSTGRES_BLD) && ../$(POSTGRES_SRC)/configure --prefix=$(INSTALL_PREFIX) --without-readline
 
 #https://stackoverflow.com/questions/68379786/
 #for explanation of unsetting make env variables prior to calling postgres' own make
-$(PREFIX)/bin/postgres: $(POSTGRES_DIR)/config.status $(PREFIX)
-	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_DIR) \
+$(INSTALL_PREFIX)/bin/postgres: $(POSTGRES_BLD)/config.status
+	mkdir -p $(INSTALL_PREFIX)
+	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(POSTGRES_BLD) \
 		&& $(MAKE) -j \
 		&& $(MAKE) install
 
 .PHONY: postgres
-postgres: $(PREFIX)/bin/postgres
+postgres: $(INSTALL_PREFIX)/bin/postgres
 
 ### pgvector
 PGVECTOR_TAG := v0.5.1
@@ -48,20 +47,21 @@ $(PGVECTOR_DIR)/Makefile: $(PGVECTOR_DIR).tar.gz
 	tar xzf $(PGVECTOR_DIR).tar.gz -C $(PGVECTOR_DIR) --strip-components=1
 	touch $(PGVECTOR_DIR)/Makefile
 
-$(PREFIX)/lib/vector.so: $(PGVECTOR_DIR)/Makefile $(PREFIX)/bin/postgres
+$(INSTALL_PREFIX)/lib/vector.so: $(PGVECTOR_DIR)/Makefile $(INSTALL_PREFIX)/bin/postgres
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && cd $(PGVECTOR_DIR) \
-		&& export PG_CONFIG=$(PREFIX)/bin/pg_config \
+		&& export PG_CONFIG=$(INSTALL_PREFIX)/bin/pg_config \
 		&& $(MAKE) -j \
 		&& $(MAKE) install
 
 .PHONY: pgvector
-pgvector: postgres $(PREFIX)/lib/vector.so
+pgvector: postgres $(INSTALL_PREFIX)/lib/vector.so
 
 ### other
 .PHONY: clean clean-all
 clean:
-	rm -rf $(PREFIX)
-	rm -rf $(POSTGRES_DIR)
+	rm -rf $(INSTALL_PREFIX)
+	rm -rf $(POSTGRES_SRC)
+	rm -rf $(POSTGRES_BLD)
 	rm -rf $(PGVECTOR_DIR)
 
 clean-all: clean
