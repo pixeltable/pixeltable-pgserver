@@ -10,26 +10,43 @@ import platform
 import stat
 
 class PostmasterInfo:
-    def __init__(self, pgdata : Path, pid : int, socket_dir : Path):
-        self.pgdata = pgdata
-        self.pid = pid
-        self.socket_dir = socket_dir
+    """Struct with contents of the PGDATA/postmaster.pid file, contains information about the running server.
+    Example of file contents: (comments added for clarity)
+    cat /Users/orm/Library/Application\ Support/Postgres/var-15/postmaster.pid
+        ```
+        3072        # pid
+        /Users/orm/Library/Application Support/Postgres/var-15 # pgdata
+        1712346200  # start_time
+        5432    # port
+        /tmp # socker_dir, where .s.PGSQL.5432 is located
+        localhost # listening on this hostname
+        8826964     65536 # shared memory id, shared memory size
+        ready # server status
+        ```
+    """
+
+    def __init__(self, lines : List[str]):
+        _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_id', 'status']
+        assert len(lines) == len(_lines), f"_lines: {_lines=} lines: {lines=}"
+        clean_lines = [ line.strip() if line.strip() != '' else None for line in lines]
+        self.__dict__.update(dict(zip(_lines, clean_lines)))
+
+        self.pid = int(self.pid) if self.pid is not None else None
+        self.pgdata = Path(self.pgdata) if self.pgdata is not None else None
+        self.start_time = int(self.start_time)
+        self.port = int(self.port) if self.port is not None else None
+        self.socket_dir = Path(self.socket_dir) if self.socket_dir is not None else None
+        self.hostname = self.hostname if self.hostname is not None else None
+
 
     @classmethod
     def read_from_pgdata(cls, pgdata : Path) -> Optional['PostmasterInfo']:
-        postmaster_pid = pgdata / 'postmaster.pid'
-        if not postmaster_pid.exists():
+        postmaster_file = pgdata / 'postmaster.pid'
+        if not postmaster_file.exists():
             return None
 
-        lines = postmaster_pid.read_text().splitlines()
-        pid = int(lines[0])
-        socket_dir = Path(lines[4])
-        socket_path = socket_dir / '.s.PGSQL.5432'
-        assert socket_dir.exists()
-        assert socket_path.exists()
-        assert socket_path.is_socket()
-
-        return cls(postmaster_pid.parent, pid, socket_dir)
+        lines = postmaster_file.read_text().splitlines()
+        return cls(lines)
 
 if platform.system() != 'Windows' and typing.TYPE_CHECKING:
     import pwd
@@ -173,10 +190,6 @@ def find_suitable_port(address : Optional[str] = None) -> int:
     port = sock.getsockname()[1]
     sock.close()
     return port
-
-
-__all__ = ['get_server']
-
 
 
 

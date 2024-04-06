@@ -185,6 +185,8 @@ def _reuse_deleted_datadir(prefix):
 def test_no_conflict():
     """ test we can start pgservers on two different datadirs with no conflict (eg port conflict)
     """
+    pid1 = None
+    pid2 = None
     try:
         with tempfile.TemporaryDirectory() as tmpdir1, tempfile.TemporaryDirectory() as tmpdir2:
             with pgserver.get_server(tmpdir1) as pg1, pgserver.get_server(tmpdir2) as pg2:

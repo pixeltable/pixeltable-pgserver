@@ -82,7 +82,13 @@ class PostgresServer:
         if database is None:
             database = self.postgres_user
 
-        return f"postgresql://{self.postgres_user}:@/{database}?host={self.get_socket_dir()}"
+        info  = self.get_postmaster_info()
+        if info.socket_dir is not None:
+            return f"postgresql://{self.postgres_user}:@/{database}?host={self.get_socket_dir()}"
+        else:
+            assert info.port is not None
+            assert info.hostname is not None
+            return f"postgresql://{self.postgres_user}:@{info.hostname}:{info.port}/{database}"
 
     def ensure_pgdata_inited(self) -> None:
         """ Initializes the pgdata directory if it is not already initialized.
@@ -141,7 +147,6 @@ class PostgresServer:
         self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
         assert self._postmaster_info is not None
         assert self._postmaster_info.pid is not None
-        assert self._postmaster_info.socket_dir is not None
 
     def _cleanup(self) -> None:
         with self._lock:
