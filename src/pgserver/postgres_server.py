@@ -64,17 +64,12 @@ class PostgresServer:
         assert self._postmaster_info is not None
         return self._postmaster_info
 
-    def get_pid(self) -> int:
+    def get_pid(self) -> Optional[int]:
         """ Returns the pid of the postgresql server process.
             (First line of postmaster.pid file).
             If the server is not running, returns None.
         """
         return self.get_postmaster_info().pid
-
-    def get_socket_dir(self) -> Path:
-        """ Returns the directory of the domain socket used by the server.
-        """
-        return self.get_postmaster_info().socket_dir
 
     def get_uri(self, database : Optional[str] = None) -> str:
         """ Returns a connection string for the postgresql server.
@@ -84,7 +79,7 @@ class PostgresServer:
 
         info  = self.get_postmaster_info()
         if info.socket_dir is not None:
-            return f"postgresql://{self.postgres_user}:@/{database}?host={self.get_socket_dir()}"
+            return f"postgresql://{self.postgres_user}:@/{database}?host={info.socket_dir}"
         else:
             assert info.port is not None
             assert info.hostname is not None

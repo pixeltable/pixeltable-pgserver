@@ -49,8 +49,6 @@ class PostmasterInfo:
         lines = postmaster_file.read_text().splitlines()
         return cls(lines)
 
-if platform.system() != 'Windows' and typing.TYPE_CHECKING:
-    import pwd
 
 def process_is_running(pid : int) -> bool:
     assert pid is not None
@@ -62,6 +60,8 @@ if platform.system() != 'Windows':
             Returns their pwentry if user exists, otherwise it creates a user through `useradd`.
             Assume permissions to add users, eg run as root.
         """
+        import pwd
+
         try:
             entry = pwd.getpwnam(username)
         except KeyError:
