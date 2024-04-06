@@ -30,7 +30,8 @@ def create_command_function(pg_exe_name : str) -> Callable:
 
         try:
             logging.info("Running commandline:\n%s\nwith kwargs: `%s`", full_command_line, kwargs)
-            result = subprocess.run(full_command_line, check=True, capture_output=True, text=True,
+            # NB: capture_output=True may be causing this to hang , including with timeout.
+            result = subprocess.run(full_command_line, check=True, capture_output=False, text=True,
                                     **kwargs)
             logging.info("Successful postgres command %s with kwargs: `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
                          result.args, kwargs, result.stdout, result.stderr)
