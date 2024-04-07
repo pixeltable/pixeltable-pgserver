@@ -224,7 +224,6 @@ def test_reuse_deleted_datadir_long():
     assert len(long_prefix) > 120
     _reuse_deleted_datadir(long_prefix)
 
-@pytest.mark.skip(reason="freezes in CI worker, reenable after investigation")
 def test_multiprocess_shared():
     """ Test that multiple processes can share the same server.
 
@@ -270,7 +269,7 @@ def test_uri_string(tmp_postgres):
         cur = conn.execute(sa.text("select * from foo;"))
         assert cur.fetchone()[0] == 1
 
-@pytest.mark.skip(reason="not implemented")
+@pytest.mark.skip(reason="not yet implemented")
 def test_delete_pgdata_cleanup(tmp_postgres):
     """ Test server process is stopped when pgdata is deleted.
     """
