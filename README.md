@@ -1,5 +1,13 @@
+![Python Version](https://img.shields.io/badge/python-3.9%2C%203.10%2C%203.11-blue)
+![Linux Supported](https://img.shields.io/badge/Linux-supported-green)
+![macOS Supported](https://img.shields.io/badge/macOS-supported-green)
+![Windows Supported](https://img.shields.io/badge/Windows-supported-green)
+
+[![CI](https://github.com/orm011/pgserver/actions/workflows/wheels.yml/badge.svg)](https://github.com/orm011/pgserver/actions)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/pgserver)
+
 <p align="center">
-  <img src="pgserver_square_small.png"/>
+  <img src="https://raw.githubusercontent.com/orm011/pgserver/v0.0.8/pgserver_square_small.png"/>
 </p>
 
 # `pgserver`: pip-installable postgres + pgvector for your python app
@@ -15,7 +23,7 @@ Wheels are built for multiple platforms.
 * Also possible: developing and testing apps that depend on some external Postgres (as a dev dependency)
 
 ### Basic summary:
-* _Pip installable binaries_: tested on Ubuntu and MacOS (apple silicon + x86), including pgvector extension. 
+* _Pip installable binaries_: built and tested on Ubuntu and MacOS (apple silicon + x86) and Windows 
 * _No sudo needed_: Does not require `root` or `sudo`.
 * _Simpler initialization_: `pgserver.get_server(MY_DATA_DIR)` method to initialize data and server if needed, so you don't need to understand `initdb`, `pg_ctl`, port conflicts, and skip debugging why you still cannot connect to the server, just do `server.get_uri()` to connect. Uses unix domain sockets to avoid port conflicts.
 * _Convenient cleanup_: server process cleanup is done for you: when the process using pgserver ends, the server is shutdown, including when multiple independent processes call
@@ -54,7 +62,7 @@ Postgres binaries in the package can be found in the directory pointed
 to by the `pgserver.pg_bin` global variable. 
 
 Based on https://github.com/michelp/postgresql-wheel, but with the following differences:
-1. Wheels for multiple platforms (ubuntu x86, +MacOS x86, +MacOS apple silicon), pull requests taken for ubuntu arm.
+1. wheels for multiple platforms (ubuntu x86, +MacOS x86, +MacOS apple silicon, Windows)
 2. pgvector extension included
 3. postgres Server management: cleanup via shared count when multiple processes use the same server.
 4. no postGIS (need to build cross platform, pull requests taken)
