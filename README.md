@@ -17,7 +17,7 @@
 `pgserver` lets you build Postgres-backed python apps that remain wholly pip-installable; saving you and your users from needing to understand how to install and setup a postgres server.
 To achieve this, you need two things which `pgserver` provides
   * wheels with postgres binaries included
-  * convenient initialization and server process management
+  * convenient initialization and server process management, with defaults so as to not interfere with existing postgres installations, and with handling or prevention of many corner cases (being root, port conflicts, etc)
 
 Additionally, this package includes the `pgvector` extension.
 
