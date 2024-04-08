@@ -96,7 +96,7 @@ class PostgresServer:
                         pwd.getpwnam(self.system_user).pw_gid)
 
         if not (self.pgdata / 'PG_VERSION').exists():
-            initdb(['--auth=trust',  '--auth-local=trust',  '-U', self.postgres_user], pgdata=self.pgdata,
+            initdb(['--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user], pgdata=self.pgdata,
                     user=self.system_user)
 
     def ensure_postgres_running(self) -> None:
