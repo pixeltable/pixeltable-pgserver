@@ -1,4 +1,5 @@
-![Python Version](https://img.shields.io/badge/python-3.9%2C%203.10%2C%203.11-blue)
+![Python Version](https://img.shields.io/badge/python-3.9%2C%203.10%2C%203.11%2C%203.12-blue)
+![Postrgres Version](https://img.shields.io/badge/PostgreSQL-16.2-blue)
 ![Linux Supported](https://img.shields.io/badge/Linux-supported-green)
 ![macOS Supported](https://img.shields.io/badge/macOS-supported-green)
 ![Windows Supported](https://img.shields.io/badge/Windows-supported-green)
@@ -7,7 +8,7 @@
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pgserver)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/orm011/pgserver/v0.0.8/pgserver_square_small.png"/>
+  <img src="https://raw.githubusercontent.com/orm011/pgserver/main/pgserver_square_small.png"/>
 </p>
 
 # `pgserver`: pip-installable postgres + pgvector for your python app
