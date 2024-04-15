@@ -73,7 +73,7 @@ jobs:
       - name: Build wheels
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
-          CIBW_SKIP: pp* cp38-* cp312-* *-musllinux*
+          CIBW_SKIP: pp* cp38-* *-musllinux*
         run: python -m cibuildwheel --output-dir wheelhouse
       - name: Save postgres build
         if: ${{ matrix.os == 'ubuntu-latest' && ! steps.restore-postgres.outputs.cache-hit }}

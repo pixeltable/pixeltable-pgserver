@@ -1,2 +1,1 @@
 graft src/pgserver/pginstall
-graft pgserver_square_small.png
