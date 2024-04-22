@@ -17,6 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "sysv_ipc",
     "sqlalchemy>=2",
     "sqlalchemy-utils"
 ]
