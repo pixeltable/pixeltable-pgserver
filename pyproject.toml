@@ -18,7 +18,6 @@ dependencies = [
 dev = [
     "sysv_ipc",
 ]
-
 test = [
     "pytest",
     "psycopg2-binary",
