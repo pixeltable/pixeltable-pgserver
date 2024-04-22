@@ -1,6 +1,6 @@
 [project]
 name = "pgserver" # Required
-version = "0.1.0"  # Required
+version = "0.1.1"  # Required
 description = "Self-contained postgres server for your python applications" # Required
 readme = "README.md" # Optional
 requires-python = ">=3.9"
@@ -14,6 +14,13 @@ dependencies = [
     "psutil>=5.9.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "sqlalchemy>=2",
+    "sqlalchemy-utils"
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
 include = ["pgserver*"]  # package names should match these glob patterns (["*"] by default)
@@ -23,9 +30,8 @@ testpaths = ["tests"]
 
 [tool.cibuildwheel]
 before-all = "make"
-test-requires = "pytest"
+test-extras = "dev"
 test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
-
 
 [build-system]
 # These are the assumed default build requirements from pip:

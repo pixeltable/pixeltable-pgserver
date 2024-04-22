@@ -6,12 +6,15 @@ import subprocess
 import os
 import logging
 import platform
+import psutil
 
 from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
 from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, PostmasterInfo, process_is_running
 
 if platform.system() != 'Windows':
     from .utils import ensure_user_exists, ensure_prefix_permissions
+
+_logger = logging.getLogger('pgserver')
 
 class PostgresServer:
     """ Provides a common interface for interacting with a server.
@@ -74,16 +77,7 @@ class PostgresServer:
     def get_uri(self, database : Optional[str] = None) -> str:
         """ Returns a connection string for the postgresql server.
         """
-        if database is None:
-            database = self.postgres_user
-
-        info  = self.get_postmaster_info()
-        if info.socket_dir is not None:
-            return f"postgresql://{self.postgres_user}:@/{database}?host={info.socket_dir}"
-        else:
-            assert info.port is not None
-            assert info.hostname is not None
-            return f"postgresql://{self.postgres_user}:@{info.hostname}:{info.port}/{database}"
+        return self.get_postmaster_info().get_uri(database=database)
 
     def ensure_pgdata_inited(self) -> None:
         """ Initializes the pgdata directory if it is not already initialized.
@@ -95,7 +89,30 @@ class PostgresServer:
             os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid,
                         pwd.getpwnam(self.system_user).pw_gid)
 
-        if not (self.pgdata / 'PG_VERSION').exists():
+        if not (self.pgdata / 'PG_VERSION').exists(): # making a new PGDATA
+            # First ensure there are no left-over servers on a previous version of the same pgdata path,
+            # which does happen on Mac/Linux if the previous pgdata was deleted without stopping the server process
+            # (the old server continues running for some time, sometimes indefinitely)
+            #
+            # It is likely the old server could also corrupt the data beyond the socket file, so it is best to kill it.
+            # This must be done before initdb to ensure no race conditions with the old server.
+            #
+            # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
+            # way to test this: python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
+            for proc in psutil.process_iter(attrs=['name', 'cmdline']):
+                if proc.info['name'] == 'postgres':
+                    if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
+                        _logger.warning(f"Found a running postgres server with same pgdata: {proc.as_dict(attrs=['name', 'pid', 'cmdline'])=}.\
+                                            Assuming it is a leftover from a previous run on a different version of the same pgdata path, killing it.")
+                        proc.terminate()
+                        try:
+                            proc.wait(2) # wait at most a second
+                        except psutil.TimeoutExpired:
+                            pass
+                        if proc.is_running():
+                            proc.kill()
+                        assert not proc.is_running()
+
             initdb(['--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user], pgdata=self.pgdata,
                     user=self.system_user)
 
@@ -120,6 +137,7 @@ class PostgresServer:
                         'start' # action
                 ]
             else: # Windows,
+                socket_dir = None
                 # socket.AF_UNIX is undefined when running on Windows, so default to a port
                 host = "127.0.0.1"
                 port = find_suitable_port(host)
@@ -133,13 +151,15 @@ class PostgresServer:
             try:
                 pg_ctl(pg_ctl_args,pgdata=self.pgdata, user=self.system_user, timeout=10)
             except subprocess.CalledProcessError as err:
-                logging.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
+                _logger.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                 raise err
             except subprocess.TimeoutExpired as err:
-                logging.error(f"Timeout starting server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
+                _logger.error(f"Timeout starting server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                 raise err
 
         self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
+        _logger.info(f"{self._postmaster_info=}")
+        assert self._postmaster_info.status == 'ready'
         assert self._postmaster_info is not None
         assert self._postmaster_info.pid is not None
 

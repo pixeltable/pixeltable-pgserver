@@ -7,6 +7,8 @@ import tempfile
 
 POSTGRES_BIN_PATH = Path(__file__).parent / "pginstall" / "bin"
 
+_logger = logging.getLogger('pgserver')
+
 def create_command_function(pg_exe_name : str) -> Callable:
     def command(args : List[str], pgdata : Optional[Path] = None, **kwargs) -> str:
         """
@@ -31,7 +33,7 @@ def create_command_function(pg_exe_name : str) -> Callable:
 
         with tempfile.TemporaryFile('w+') as stdout, tempfile.TemporaryFile('w+') as stderr:
             try:
-                logging.info("Running commandline:\n%s\nwith kwargs: `%s`", full_command_line, kwargs)
+                _logger.info("Running commandline:\n%s\nwith kwargs: `%s`", full_command_line, kwargs)
                 # NB: capture_output=True, as well as using stdout=subprocess.PIPE and stderr=subprocess.PIPE
                 # can cause this call to hang, even with a time-out depending on the command, (pg_ctl)
                 # so we use two temporary files instead
@@ -39,12 +41,12 @@ def create_command_function(pg_exe_name : str) -> Callable:
                                         **kwargs)
                 stdout.seek(0)
                 stderr.seek(0)
-                logging.info("Successful postgres command %s with kwargs: `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
+                _logger.info("Successful postgres command %s with kwargs: `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
                             result.args, kwargs, stdout.read(), stderr.read())
             except subprocess.CalledProcessError as err:
                 stdout.seek(0)
                 stderr.seek(0)
-                logging.error("Failed postgres command %s with kwargs: `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
+                _logger.error("Failed postgres command %s with kwargs: `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
                             err.args, kwargs, str(err), stdout.read(), stderr.read())
                 raise err
 

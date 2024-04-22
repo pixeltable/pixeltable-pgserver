@@ -1,6 +1,6 @@
 from pathlib import Path
 import typing
-from typing import Optional, List
+from typing import Optional, List, Dict
 import subprocess
 import json
 import logging
@@ -9,6 +9,9 @@ import socket
 import platform
 import stat
 import psutil
+import datetime
+
+_logger = logging.getLogger('pgserver')
 
 class PostmasterInfo:
     """Struct with contents of the PGDATA/postmaster.pid file, contains information about the running server.
@@ -21,24 +24,42 @@ class PostmasterInfo:
         5432    # port
         /tmp # socker_dir, where .s.PGSQL.5432 is located
         localhost # listening on this hostname
-        8826964     65536 # shared memory id, shared memory size
+        8826964     65536 # shared mem size?, shmget id (can deallocate with sysv_ipc.remove_shared_memory(shmget_id))
         ready # server status
         ```
     """
 
     def __init__(self, lines : List[str]):
-        _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_id', 'status']
+        _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status']
         assert len(lines) == len(_lines), f"_lines: {_lines=} lines: {lines=}"
-        clean_lines = [ line.strip() if line.strip() != '' else None for line in lines]
-        self.__dict__.update(dict(zip(_lines, clean_lines)))
+        clean_lines = [ line.strip() for line in lines ]
 
-        self.pid = int(self.pid) if self.pid is not None else None
-        self.pgdata = Path(self.pgdata) if self.pgdata is not None else None
-        self.start_time = int(self.start_time)
-        self.port = int(self.port) if self.port is not None else None
-        self.socket_dir = Path(self.socket_dir) if self.socket_dir is not None else None
-        self.hostname = self.hostname if self.hostname is not None else None
+        raw : Dict[str,str] = dict(zip(_lines, clean_lines))
 
+        self.pid = int(raw['pid'])
+        self.pgdata = Path(raw['pgdata'])
+        self.start_time = datetime.datetime.fromtimestamp(int(raw['start_time']))
+
+        self.port = int(raw['port']) if raw['port'] else None
+        if raw['socket_dir']:
+            self.socket_dir = Path(raw['socket_dir'])
+        else:
+            self.socket_dir = None
+
+        self.hostname = self.hostname if raw['hostname'] else None
+
+        # not sure what this is in windows
+        self.shmem_info = raw['shared_memory_info']
+        self.status = raw['status']
+
+        self._process = None
+
+    @property
+    def process(self) -> psutil.Process:
+        assert self.pid is not None
+        if self._process is None:
+                self._process = psutil.Process(self.pid)
+        return self._process
 
     @classmethod
     def read_from_pgdata(cls, pgdata : Path) -> Optional['PostmasterInfo']:
@@ -48,6 +69,39 @@ class PostmasterInfo:
 
         lines = postmaster_file.read_text().splitlines()
         return cls(lines)
+
+    def get_uri(self, user : str = 'postgres', database : Optional[str] = None) -> str:
+        """ Returns a connection uri string for the postgresql server using the information in postmaster.pid"""
+        if database is None:
+            database = user
+
+        if self.socket_dir is not None:
+            return f"postgresql://{user}:@/{database}?host={self.socket_dir}"
+        elif self.port is not None:
+            assert self.hostname is not None
+            return f"postgresql://{user}:@{self.hostname}:{self.port}/{database}"
+        else:
+            raise RuntimeError("postmaster.pid does not contain port or socket information")
+
+    @property
+    def shmget_id(self) -> Optional[int]:
+        if not self.shmem_info:
+            return None
+        raw_id = self.shmem_info.split()[-1]
+        return int(raw_id)
+
+    @property
+    def socket_path(self) -> Optional[Path]:
+        if self.socket_dir is not None:
+            # TODO: is the port always 5432 for the socket? or does it depend on the port in postmaster.pid?
+            return self.socket_dir / f'.s.PGSQL.{self.port}'
+        return None
+
+    def __repr__(self) -> str:
+        return f"PostmasterInfo(pid={self.pid}, pgdata={self.pgdata}, start_time={self.start_time}, hostname={self.hostname} port={self.port}, socket_dir={self.socket_dir})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 def process_is_running(pid : int) -> bool:
@@ -167,10 +221,10 @@ def find_suitable_socket_dir(pgdata, runtime_path) -> Path:
         # name used by postgresql for domain socket is .s.PGSQL.5432
         if socket_name_length_ok(path / '.s.PGSQL.5432'):
             ok_path = path
-            logging.info(f"Using socket path: {path}")
+            _logger.info(f"Using socket path: {path}")
             break
         else:
-            logging.info(f"Socket path too long: {path}. Will try a different directory for socket.")
+            _logger.info(f"Socket path too long: {path}. Will try a different directory for socket.")
 
     if ok_path is None:
         raise RuntimeError("Could not find a suitable socket path")
@@ -186,9 +240,3 @@ def find_suitable_port(address : Optional[str] = None) -> int:
     port = sock.getsockname()[1]
     sock.close()
     return port
-
-
-
-
-
-
