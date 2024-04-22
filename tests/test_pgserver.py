@@ -14,7 +14,6 @@ import platform
 import sqlalchemy as sa
 import datetime
 from sqlalchemy_utils import database_exists, create_database
-import sysv_ipc
 import logging
 
 def _check_sqlalchemy_works(srv : pgserver.PostgresServer):
@@ -271,8 +270,8 @@ def _reuse_deleted_datadir(prefix: str):
             server_processes.append(server_proc)
             postmaster = pgserver.utils.PostmasterInfo.read_from_pgdata(pgdata)
 
-            assert postmaster.shmget_id is not None
-            shmem_ids.append(postmaster.shmget_id)
+            if postmaster.shmget_id is not None:
+                shmem_ids.append(postmaster.shmget_id)
 
             if platform.system() == 'Windows':
                 # windows will not allow deletion of the directory while the server is running
@@ -281,11 +280,23 @@ def _reuse_deleted_datadir(prefix: str):
             shutil.rmtree(pgdata)
             assert server_proc.is_running()
     finally:
-        for shmid in shmem_ids:
+        if platform.system() != 'Windows':
+            # if sysv_ipc is installed (eg locally), remove the shared memory segment
+            # done this way because of CI/CD issues with sysv_ipc
+            # this avoids having to restart the machine to clear the shared memory
             try:
-                sysv_ipc.remove_shared_memory(shmid)
-            except sysv_ipc.ExistentialError as e:
-                logging.info(f"shared memory already removed: {e}")
+                import sysv_ipc
+                do_shmem_cleanup = True
+            except ImportError:
+                do_shmem_cleanup = False
+                logging.warning("sysv_ipc not installed, skipping shared memory cleanup")
+
+            if do_shmem_cleanup:
+                for shmid in shmem_ids:
+                    try:
+                        sysv_ipc.remove_shared_memory(shmid)
+                    except sysv_ipc.ExistentialError as e:
+                        logging.info(f"shared memory already removed: {e}")
 
         for proc in server_processes:
             _kill_server(proc)

@@ -16,8 +16,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
     "sysv_ipc",
+]
+
+test = [
+    "pytest",
+    "psycopg2-binary",
     "sqlalchemy>=2",
     "sqlalchemy-utils"
 ]
@@ -31,7 +35,7 @@ testpaths = ["tests"]
 
 [tool.cibuildwheel]
 before-all = "make"
-test-extras = "dev"
+test-extras = "test"
 test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 [build-system]

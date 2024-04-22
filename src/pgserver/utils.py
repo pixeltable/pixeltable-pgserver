@@ -85,6 +85,9 @@ class PostmasterInfo:
 
     @property
     def shmget_id(self) -> Optional[int]:
+        if platform.system() == 'Windows':
+            return None
+
         if not self.shmem_info:
             return None
         raw_id = self.shmem_info.split()[-1]
