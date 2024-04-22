@@ -40,13 +40,20 @@ class PostmasterInfo:
         self.pgdata = Path(raw['pgdata'])
         self.start_time = datetime.datetime.fromtimestamp(int(raw['start_time']))
 
-        self.port = int(raw['port']) if raw['port'] else None
         if raw['socket_dir']:
             self.socket_dir = Path(raw['socket_dir'])
         else:
             self.socket_dir = None
 
-        self.hostname = self.hostname if raw['hostname'] else None
+        if raw['hostname']:
+            self.hostname = raw['hostname']
+        else:
+            self.hostname = None
+
+        if raw['port']:
+            self.port = int(raw['port'])
+        else:
+            self.port = None
 
         # not sure what this is in windows
         self.shmem_info = raw['shared_memory_info']
