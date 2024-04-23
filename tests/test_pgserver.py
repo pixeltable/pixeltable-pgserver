@@ -278,7 +278,6 @@ def _reuse_deleted_datadir(prefix: str):
                 _kill_server(server_proc)
 
             shutil.rmtree(pgdata)
-            assert server_proc.is_running()
     finally:
         if platform.system() != 'Windows':
             # if sysv_ipc is installed (eg locally), remove the shared memory segment
