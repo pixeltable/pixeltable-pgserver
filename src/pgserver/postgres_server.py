@@ -169,27 +169,43 @@ class PostgresServer:
 
         self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
         _logger.info(f"{self._postmaster_info=}")
-        assert self._postmaster_info.status == 'ready'
         assert self._postmaster_info is not None
+        assert self._postmaster_info.status == 'ready'
         assert self._postmaster_info.pid is not None
+
 
     def _cleanup(self) -> None:
         with self._lock:
             pids = self.global_process_id_list.get_and_remove(os.getpid())
-
+            _logger.info(f"exiting {os.getpid()} remaining {pids=}")
             if pids != [os.getpid()]: # includes case where already cleaned up
                 return
+
+            _logger.info(f"cleaning last handle for server: {self.pgdata}")
             # last handle is being removed
             del self._instances[self.pgdata]
             if self.cleanup_mode is None: # done
                 return
 
             assert self.cleanup_mode in ['stop', 'delete']
-            if process_is_running(self._postmaster_info.pid):
-                try:
-                    pg_ctl(['-w', 'stop'], pgdata=self.pgdata, user=self.system_user)
-                except subprocess.CalledProcessError:
-                    pass # somehow the server is already stopped.
+            if self._postmaster_info is not None:
+                if self._postmaster_info.process.is_running():
+                    try:
+                        pg_ctl(['-w', 'stop'], pgdata=self.pgdata, user=self.system_user)
+                        stopped = True
+                    except subprocess.CalledProcessError:
+                        stopped = False
+                        pass # somehow the server is already stopped.
+
+                    if not stopped:
+                        _logger.warning(f"Failed to stop server, killing it instead.")
+                        self._postmaster_info.process.terminate()
+                        try:
+                            self._postmaster_info.process.wait(2)
+                        except psutil.TimeoutExpired:
+                            pass
+                        if self._postmaster_info.process.is_running():
+                            self._postmaster_info.process.kill()
 
             if self.cleanup_mode == 'stop':
                 return
