@@ -7,7 +7,7 @@ requires-python = ">=3.9"
 license = {file = "LICENSE.txt"}
 urls={repository="https://github.com/orm011/pgserver"}
 authors=[{ name="Oscar Moll", email="orm@csail.mit.edu" }]
-keywords=["postgresql", "pgvector", "pgserver"]
+keywords=["postgresql", "pgvector", "pgserver", "rag"]
 dependencies = [
     "fasteners>=0.19",
     "platformdirs>=4.0.0",
