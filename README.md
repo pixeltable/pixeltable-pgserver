@@ -6,6 +6,7 @@
 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pgserver)
 
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/orm011/pgserver/main/pgserver_square_small.png"/>
 </p>
@@ -20,6 +21,9 @@ To achieve this, you need two things which `pgserver` provides
   * convenient initialization and server process management, with defaults that do not interfere with existing postgres installations, and with handling or prevention of many corner cases (being root, port conflicts, etc)
 
 Additionally, this package includes the `pgvector` extension.
+
+Try it out:
+<a target="_blank" href="https://colab.research.google.com/github/orm011/pgserver/blob/master/pgserver-example.ipynb"> <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/> </a>
 
 ## Basic summary:
 * _Pip installable binaries_: built and tested on Manylinux, MacOS and Windows.
