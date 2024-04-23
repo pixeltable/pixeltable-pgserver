@@ -143,13 +143,13 @@ def test_reentrant():
             _kill_server(pid)
 
 def _start_server_in_separate_process(pgdata, queue_in : Optional[mp.Queue], queue_out : mp.Queue, cleanup_mode : Optional[str]):
-    pg = pgserver.get_server(pgdata, cleanup_mode=cleanup_mode)
-    pid = _check_server(pg)
-    queue_out.put(pid)
+    with pgserver.get_server(pgdata, cleanup_mode=cleanup_mode) as pg:
+        pid = _check_server(pg)
+        queue_out.put(pid)
 
-    if queue_in is not None:
-        _ = queue_in.get() # wait for signal
-        return
+        if queue_in is not None:
+            _ = queue_in.get() # wait for signal
+            return
 
 def test_unix_domain_socket():
     if platform.system() == 'Windows':
