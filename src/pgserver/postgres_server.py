@@ -12,7 +12,7 @@ from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
 from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, PostmasterInfo, process_is_running
 
 if platform.system() != 'Windows':
-    from .utils import ensure_user_exists, ensure_prefix_permissions
+    from .utils import ensure_user_exists, ensure_prefix_permissions, ensure_folder_permissions
 
 _logger = logging.getLogger('pgserver')
 
@@ -84,8 +84,18 @@ class PostgresServer:
         """
         if platform.system() != 'Windows' and os.geteuid() == 0:
             import pwd
+            import stat
             assert self.system_user is not None
             ensure_prefix_permissions(self.pgdata)
+            ensure_prefix_permissions(POSTGRES_BIN_PATH)
+
+            read_perm = stat.S_IRGRP | stat.S_IROTH
+            execute_perm = stat.S_IXGRP | stat.S_IXOTH
+            # for envs like cibuildwheel docker, where the user is has no permission otherwise
+            ensure_folder_permissions(POSTGRES_BIN_PATH, execute_perm | read_perm)
+            ensure_folder_permissions(POSTGRES_BIN_PATH.parent / 'lib', read_perm)
+
+
             os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid,
                         pwd.getpwnam(self.system_user).pw_gid)
 

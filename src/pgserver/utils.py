@@ -10,6 +10,7 @@ import platform
 import stat
 import psutil
 import datetime
+import shutil
 
 _logger = logging.getLogger('pgserver')
 
@@ -154,6 +155,23 @@ if platform.system() != 'Windows':
             if prefix == prefix.parent: # reached file system root
                 break
             prefix = prefix.parent
+
+    def ensure_folder_permissions(path: Path, flag : int):
+        """ Ensure target user can read,  and execute the folder.
+            Permissions for everyone will be increased to ensure traversal.
+        """
+        # read and traverse folder
+        g_rx_o_rx = stat.S_IRGRP |  stat.S_IROTH | stat.S_IXGRP | stat.S_IXOTH
+
+        def _helper(path: Path):
+            if path.is_dir():
+                path.chmod(path.stat().st_mode | g_rx_o_rx )
+                for child in path.iterdir():
+                    _helper(child)
+            else:
+                path.chmod(path.stat().st_mode | flag)
+
+        _helper(path)
 
 class DiskList:
     """ A list of integers stored in a file on disk.
