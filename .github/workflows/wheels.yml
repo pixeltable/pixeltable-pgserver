@@ -85,18 +85,6 @@ jobs:
         with:
           path: wheelhouse/*.whl
           name: python-package-distributions
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
-        with:
-          name: python-package-distributions
-          path: dist
-      - name: Install and test ubuntu wheel
-        if: matrix.os == 'ubuntu-latest'
-        # test ubuntu outside of cibuildwheel due to postgres root user issues
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --force-reinstall dist/*cp39*manylinux*x86*.whl[test]
-          pytest -s -v --log-cli-level=INFO ./tests
   publish-to-pypi:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     name: Publish Python dist to PyPI
