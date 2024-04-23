@@ -4,7 +4,6 @@
 ![macOS Supported](https://img.shields.io/badge/macOS-supported-green)
 ![Windows Supported](https://img.shields.io/badge/Windows-supported-green)
 
-[![CI](https://github.com/orm011/pgserver/actions/workflows/wheels.yml/badge.svg)](https://github.com/orm011/pgserver/actions)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pgserver)
 
 <p align="center">
@@ -18,17 +17,17 @@
 `pgserver` lets you build Postgres-backed python apps that remain wholly pip-installable; saving you and your users from needing to understand how to install and setup a postgres server.
 To achieve this, you need two things which `pgserver` provides
   * wheels with postgres binaries included
-  * convenient initialization and server process management, with defaults so as to not interfere with existing postgres installations, and with handling or prevention of many corner cases (being root, port conflicts, etc)
+  * convenient initialization and server process management, with defaults that do not interfere with existing postgres installations, and with handling or prevention of many corner cases (being root, port conflicts, etc)
 
 Additionally, this package includes the `pgvector` extension.
 
 ## Basic summary:
 * _Pip installable binaries_: built and tested on Manylinux, MacOS and Windows.
 * _No sudo or admin rights needed_: Does not require `root` privileges or `sudo`.
-* but... _can handle root_: in some environments your python app runs as root, eg some docker containers and google collab, `pgserver` handles this case.
+* but... _can handle root_: in some environments your python app runs as root, eg docker, google colab, `pgserver` handles this case.
 * _Simpler initialization_: `pgserver.get_server(MY_DATA_DIR)` method to initialize data and server if needed, so you don't need to understand `initdb`, `pg_ctl`, port conflicts.
 * _Convenient cleanup_: server process cleanup is done for you: when the process using pgserver ends, the server is shutdown, including when multiple independent processes call
-`pgserver.get_server(MY_DATA_DIR)` on the same dir (wait for last one)
+`pgserver.get_server(MY_DATA_DIR)` on the same dir (wait for last one). You can blow away your PGDATA dir and start again.
 * For lower-level control, wrappers to all binaries, such as `initdb`, `pg_ctl`, `psql`, `pg_config`. Includes header files in case you wish to build some other extension and use it against these binaries.
 
 ```py
@@ -59,9 +58,10 @@ def tmp_postgres():
 ```
 
 Postgres binaries in the package can be found in the directory pointed
-to by the `pgserver.pg_bin` global variable. 
+to by the `pgserver.pg_bin` global variable.
 
-Based on https://github.com/michelp/postgresql-wheel, but with the following differences:
+Originally based on https://github.com/michelp/postgresql-wheel,which offers an ubuntu wheel.
+But with the following differences:
 1. binary wheels for multiple platforms (ubuntu x86, MacOS apple silicon, MacOS x86, Windows)
-2. postgres server management: cross platform startup and cleanup
+2. postgres server management: cross-platform builds, with cross-platfurm startup and cleanup including many edge cases.
 3. includes `pgvector` extension but excludes `postGIS` (need to build cross platform, pull requests taken)

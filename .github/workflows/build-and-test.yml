@@ -1,8 +1,5 @@
-name: Build Wheels
+name: Build and Test
 on:
-  release:
-    types:
-      - created
   push:
     branches:
       - testing
@@ -12,10 +9,10 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: ${{ startsWith(github.ref, 'refs/tags/') }}
+      fail-fast: false
       matrix:
         include:
-          - os: macos-13
+          - os: macos-12
             arch: x86_64
           - os: macos-latest
             arch: arm64
@@ -85,22 +82,3 @@ jobs:
         with:
           path: wheelhouse/*.whl
           name: python-package-distributions
-  publish-to-pypi:
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    name: Publish Python dist to PyPI
-    needs:
-    - build_wheels
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/pgserver  # Replace <package-name> with your PyPI project name
-    permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
-    steps:
-        - name: Download all the dists
-          uses: actions/download-artifact@v3
-          with:
-            name: python-package-distributions
-            path: dist/
-        - name: Publish distribution 📦 to PyPI
-          uses: pypa/gh-action-pypi-publish@release/v1
