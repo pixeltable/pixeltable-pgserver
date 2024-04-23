@@ -112,7 +112,7 @@ class PostgresServer:
             for proc in psutil.process_iter(attrs=['name', 'cmdline']):
                 if proc.info['name'] == 'postgres':
                     if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
-                        _logger.warning(f"Found a running postgres server with same pgdata: {proc.as_dict(attrs=['name', 'pid', 'cmdline'])=}.\
+                        _logger.info(f"Found a running postgres server with same pgdata: {proc.as_dict(attrs=['name', 'pid', 'cmdline'])=}.\
                                             Assuming it is a leftover from a previous run on a different version of the same pgdata path, killing it.")
                         proc.terminate()
                         try:

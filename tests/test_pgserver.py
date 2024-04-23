@@ -288,7 +288,7 @@ def _reuse_deleted_datadir(prefix: str):
                 do_shmem_cleanup = True
             except ImportError:
                 do_shmem_cleanup = False
-                logging.warning("sysv_ipc not installed, skipping shared memory cleanup")
+                logging.warning("sysv_ipc not installed, skipping shared memory cleanup...")
 
             if do_shmem_cleanup:
                 for shmid in shmem_ids:
