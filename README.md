@@ -11,19 +11,15 @@
   <img src="https://raw.githubusercontent.com/orm011/pgserver/main/pgserver_square_small.png"/>
 </p>
 
-# `pgserver`: pip-installable postgres + pgvector for your python app
+# pgserver: pip-installable postgres + pgvector for your python app
 
-`pip install pgserver`
+`pgserver` lets you build Postgres-backed python apps that remain wholly pip-installable; saving your users from needing to understand how to setup a postgres server (they simply pip install your app, and postgres is brought in through dependencies), and letting you get started developing quickly: just `pip install pgserver` and `pgserver.get_server(...)`, as shown in this notebook: <a target="_blank" href="https://colab.research.google.com/github/orm011/pgserver/blob/master/pgserver-example.ipynb"> <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/> </a> 
 
-`pgserver` lets you build Postgres-backed python apps that remain wholly pip-installable; saving you and your users from needing to understand how to install and setup a postgres server.
 To achieve this, you need two things which `pgserver` provides
-  * wheels with postgres binaries included
-  * convenient initialization and server process management, with defaults that do not interfere with existing postgres installations, and with handling or prevention of many corner cases (being root, port conflicts, etc)
+  * python binary wheels for multiple-plaforms with postgres binaries
+  * convenience python methods that handle db initialization and server process management, that deals with things that would normally prevent you from running your python app seamlessly on environments like docker containers, a machine you have no root access in, machines with other running postgres servers, google colab, etc.  One main goal of the project is robustness around this.
 
-Additionally, this package includes the `pgvector` extension.
-
-Try it out:
-<a target="_blank" href="https://colab.research.google.com/github/orm011/pgserver/blob/master/pgserver-example.ipynb"> <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/> </a>
+Additionally, this package includes the [pgvector](https://github.com/pgvector/pgvector) postgres extension, useful for storing associated vector data and for vector similarity queries.
 
 ## Basic summary:
 * _Pip installable binaries_: built and tested on Manylinux, MacOS and Windows.
@@ -38,13 +34,12 @@ Try it out:
 # Example 1: postgres backed application
 import pgserver
 
-pgdata = f'{MY_APP_DIR}/pgdata'
-db = pgserver.get_server(pgdata)
+db = pgserver.get_server(MYPGDATA)
 # server ready for connection.
 
 print(db.psql('create extension vector'))
 db_uri = db.get_uri()
-# use uri with sqlalchemy / psycopg, etc
+# use uri with sqlalchemy / psycopg, etc, see colab.
 
 # if no other process is using this server, it will be shutdown at exit,
 # if other process use same pgadata, server process will be shutdown when all stop.
@@ -57,15 +52,16 @@ import pytest
 @pytest.fixture
 def tmp_postgres():
     tmp_pg_data = tempfile.mkdtemp()
-    with pgserver.get_server(tmp_pg_data, cleanup_mode='delete') as pg:
-        yield pg
+    pg = pgserver.get_server(tmp_pg_data, cleanup_mode='stop')
+    yield pg
+    pg.cleanup()
 ```
 
 Postgres binaries in the package can be found in the directory pointed
-to by the `pgserver.pg_bin` global variable.
+to by the `pgserver.POSTGRES_BIN_PATH` to be used directly.
 
-Originally based on https://github.com/michelp/postgresql-wheel,which offers an ubuntu wheel.
-But with the following differences:
+This project was originally based on [](https://github.com/michelp/postgresql-wheel), which provides a linux wheel.
+But adds the following differences:
 1. binary wheels for multiple platforms (ubuntu x86, MacOS apple silicon, MacOS x86, Windows)
-2. postgres server management: cross-platform builds, with cross-platfurm startup and cleanup including many edge cases.
-3. includes `pgvector` extension but excludes `postGIS` (need to build cross platform, pull requests taken)
+2. postgres python management: cross-platfurm startup and cleanup including many edge cases, runs on colab etc.
+3. includes `pgvector` extension but currently excludes `postGIS`
