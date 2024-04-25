@@ -11,9 +11,10 @@
   <img src="https://raw.githubusercontent.com/orm011/pgserver/main/pgserver_square_small.png"/>
 </p>
 
-# pgserver: pip-installable postgres server + pgvector extension for your python app
+# pgserver: pip-installable, embedded postgres server + pgvector extension for your python app
 
-`pgserver` lets you build Postgres-backed python apps that remain wholly pip-installable; saving your users from needing to understand how to setup a postgres server (they simply pip install your app, and postgres is brought in through dependencies), and letting you get started developing quickly: just `pip install pgserver` and `pgserver.get_server(...)`, as shown in this notebook: <a target="_blank" href="https://colab.research.google.com/github/orm011/pgserver/blob/master/pgserver-example.ipynb"> <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/> </a> 
+`pgserver` lets you build Postgres-backed python apps with the same convenience afforded by an embedded database (ie, alternatives such as sqlite). 
+If you build your app with pgserver, your app remains wholly pip-installable, saving your users from needing to understand how to setup a postgres server (they simply pip install your app, and postgres is brought in through dependencies), and letting you get started developing quickly: just `pip install pgserver` and `pgserver.get_server(...)`, as shown in this notebook: <a target="_blank" href="https://colab.research.google.com/github/orm011/pgserver/blob/master/pgserver-example.ipynb"> <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/> </a> 
 
 To achieve this, you need two things which `pgserver` provides
   * python binary wheels for multiple-plaforms with postgres binaries
