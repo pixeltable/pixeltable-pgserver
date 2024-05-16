@@ -41,16 +41,20 @@ def create_command_function(pg_exe_name : str) -> Callable:
                                         **kwargs)
                 stdout.seek(0)
                 stderr.seek(0)
+                output = stdout.read()
+                error = stderr.read()
                 _logger.info("Successful postgres command %s with kwargs: `%s`\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
-                            result.args, kwargs, stdout.read(), stderr.read())
+                            result.args, kwargs, output, error)
             except subprocess.CalledProcessError as err:
                 stdout.seek(0)
                 stderr.seek(0)
+                output = stdout.read()
+                error = stderr.read()
                 _logger.error("Failed postgres command %s with kwargs: `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n",
-                            err.args, kwargs, str(err), stdout.read(), stderr.read())
+                            err.args, kwargs, str(err), output,  error)
                 raise err
 
-        return result.stdout
+        return output
 
     return command
 

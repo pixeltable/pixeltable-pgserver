@@ -43,11 +43,7 @@ def _check_postmaster_info(pgdata : Path, postmaster_info : pgserver.utils.Postm
     assert postmaster_info.pgdata is not None
     assert postmaster_info.pgdata == pgdata
 
-    assert postmaster_info.pid is not None
-    assert postmaster_info.process.is_running()
-    exact_create_time = datetime.datetime.fromtimestamp(postmaster_info.process.create_time())
-    assert postmaster_info.start_time is not None
-    assert abs(postmaster_info.start_time - exact_create_time) <= datetime.timedelta(seconds=1)
+    assert postmaster_info.is_running()
 
     if postmaster_info.socket_dir is not None:
         assert postmaster_info.socket_dir.exists()
@@ -175,6 +171,44 @@ def test_unix_domain_socket():
             finally:
                 _kill_server(pid)
 
+def test_pg_ctl():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with pgserver.get_server(tmpdir) as pg:
+                output = pgserver.pg_ctl(['status'], str(pg.pgdata))
+                assert 'server is running' in output.splitlines()[0]
+
+        finally:
+            _kill_server(pid)
+
+def test_stale_postmaster():
+    """  To simulate a stale postmaster.pid file, we create a postmaster.pid file by starting a server,
+        back the file up, then restore the backup to the original location after killing the server.
+        ( our method to kill the server is graceful to avoid running out of shmem, but this seems to also
+            remove the postmaster.pid file, so we need to go to these lengths to simulate a stale postmaster.pid file )
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        try:
+            with pgserver.get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                pgdata = pg.pgdata
+                postmaster_pid = pgdata / 'postmaster.pid'
+
+                ## make a backup of the postmaster.pid file
+                shutil.copy2(str(postmaster_pid), str(postmaster_pid) + '.bak')
+
+            # restore the backup to gurantee a stale postmaster.pid file
+            shutil.copy2(str(postmaster_pid) + '.bak', str(postmaster_pid))
+            with pgserver.get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
 def test_cleanup_delete():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -243,8 +277,8 @@ def test_no_conflict():
 
 
 def _reuse_deleted_datadir(prefix: str):
-    """ test common scenario where we repeatedly delete the datadir and start a new server on it."""
-    """NB: currently this test is not reproducing the problem"""
+    """ test common scenario where we repeatedly delete the datadir and start a new server on it """
+    """ NB: currently this test is not reproducing the problem """
     # one can reproduce the problem by running the following in a loop:
     # python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
     # which creates a database with more contents etc
@@ -255,8 +289,7 @@ def _reuse_deleted_datadir(prefix: str):
 
     num_tries = 3
     try:
-        for iter in range(num_tries):
-            print(f"iteration {iter}")
+        for _ in range(num_tries):
             assert not pgdata.exists()
 
             queue_from_child = mp.Queue()

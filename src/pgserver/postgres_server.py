@@ -7,6 +7,7 @@ import os
 import logging
 import platform
 import psutil
+import time
 
 from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
 from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, PostmasterInfo, process_is_running
@@ -109,6 +110,7 @@ class PostgresServer:
             #
             # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
             # way to test this: python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
+            _logger.info('no PG_VERSION file found, initializing pgdata')
             for proc in psutil.process_iter(attrs=['name', 'cmdline']):
                 if proc.info['name'] == 'postgres':
                     if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
@@ -125,13 +127,22 @@ class PostgresServer:
 
             initdb(['--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user], pgdata=self.pgdata,
                     user=self.system_user)
+        else:
+            _logger.info('PG_VERSION file found, skipping initdb')
 
     def ensure_postgres_running(self) -> None:
-        """ pre condition: pgdata is initialized
+        """ pre condition: pgdata is initialized, being run with lock.
             post condition: self._postmaster_info is set.
         """
-        self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
-        if self._postmaster_info is None:
+
+        postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
+        if postmaster_info is not None and postmaster_info.is_running():
+            self._postmaster_info = postmaster_info
+            _logger.info(f"server already running: {self._postmaster_info=} {self._postmaster_info.process=}")
+
+            if self._postmaster_info.status != 'ready':
+                _logger.warning(f"server running but somehow not ready: {self._postmaster_info=}")
+        else:
             if platform.system() != 'Windows':
                 # use sockets to avoid any future conflict with port numbers
                 socket_dir = find_suitable_socket_dir(self.pgdata, self.runtime_path)
@@ -159,6 +170,7 @@ class PostgresServer:
                 ]
 
             try:
+                _logger.info(f"running pg_ctl... {pg_ctl_args=}")
                 pg_ctl(pg_ctl_args,pgdata=self.pgdata, user=self.system_user, timeout=10)
             except subprocess.CalledProcessError as err:
                 _logger.error(f"Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
@@ -167,12 +179,12 @@ class PostgresServer:
                 _logger.error(f"Timeout starting server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                 raise err
 
-        self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
-        _logger.info(f"{self._postmaster_info=}")
-        assert self._postmaster_info is not None
-        assert self._postmaster_info.status == 'ready'
-        assert self._postmaster_info.pid is not None
+            self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
 
+        _logger.info(f"ensuring server is running: {self._postmaster_info=}")
+        assert self._postmaster_info is not None
+        assert self._postmaster_info.is_running()
+        assert self._postmaster_info.status == 'ready'
 
     def _cleanup(self) -> None:
         with self._lock:

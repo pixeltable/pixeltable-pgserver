@@ -60,14 +60,26 @@ class PostmasterInfo:
         self.shmem_info = raw['shared_memory_info']
         self.status = raw['status']
 
-        self._process = None
+        self.process = None # will be not None if process is running
+        self._init_process_meta()
 
-    @property
-    def process(self) -> psutil.Process:
-        assert self.pid is not None
-        if self._process is None:
-                self._process = psutil.Process(self.pid)
-        return self._process
+    def _init_process_meta(self) -> Optional[psutil.Process]:
+        if self.pid is None:
+            return
+        try:
+            process = psutil.Process(self.pid)
+        except psutil.NoSuchProcess:
+            return
+
+        if self.start_time is None:
+            return
+
+        exact_create_time = datetime.datetime.fromtimestamp(process.create_time())
+        if abs(self.start_time - exact_create_time) <= datetime.timedelta(seconds=1):
+            self.process = process
+
+    def is_running(self) -> bool:
+        return self.process is not None and self.process.is_running()
 
     @classmethod
     def read_from_pgdata(cls, pgdata : Path) -> Optional['PostmasterInfo']:
