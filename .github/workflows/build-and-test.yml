@@ -17,11 +17,11 @@ jobs:
         include:
           - os: macos-12
             arch: x86_64
-          - os: macos-latest
+          - os: macos-13-arm64
             arch: arm64
           - os: ubuntu-latest
             arch: x86_64
-          - os: windows-latest
+          - os: windows-2022
             arch: AMD64
     steps:
       - uses: actions/checkout@v4
