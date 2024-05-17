@@ -69,7 +69,7 @@ jobs:
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
           CIBW_SKIP: pp* cp38-* *-musllinux*
-          MACOSX_DEPLOYMENT_TARGET: "12.0"
+          MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macos-12' && '12.0' || '14.0' }}
         run: python -m cibuildwheel --output-dir wheelhouse
       - name: Save postgres build
         if: ${{ matrix.os == 'ubuntu-latest' && ! steps.restore-postgres.outputs.cache-hit }}

@@ -121,11 +121,10 @@ class PostmasterInfo:
         return None
 
     def __repr__(self) -> str:
-        return f"PostmasterInfo(pid={self.pid}, pgdata={self.pgdata}, start_time={self.start_time}, hostname={self.hostname} port={self.port}, socket_dir={self.socket_dir})"
+        return f"PostmasterInfo(pid={self.pid}, pgdata={self.pgdata}, start_time={self.start_time}, hostname={self.hostname} port={self.port}, socket_dir={self.socket_dir} status={self.status}, process={self.process})"
 
     def __str__(self) -> str:
         return self.__repr__()
-
 
 def process_is_running(pid : int) -> bool:
     assert pid is not None

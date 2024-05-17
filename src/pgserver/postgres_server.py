@@ -137,14 +137,13 @@ class PostgresServer:
 
         postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
         if postmaster_info is not None and postmaster_info.is_running():
+            _logger.info(f"a postgres server is already running: {postmaster_info=} {postmaster_info.process=}")
             self._postmaster_info = postmaster_info
-            _logger.info(f"a postgres server is already running: {self._postmaster_info=} {self._postmaster_info.process=}")
-
-            if self._postmaster_info.status != 'ready':
-                _logger.warning(f"the server is running but not ready (unexpected) {self._postmaster_info=}")
         else:
-            _logger.info(f"no postgres server found running, assuming stale {self._postmaster_info=} ")
-
+            if postmaster_info is not None and not postmaster_info.is_running():
+                _logger.info(f"found a postmaster.pid file, but the server is not running: {postmaster_info=}")
+            if postmaster_info is None:
+                _logger.info(f"no postmaster.pid file found in {self.pgdata}")
 
             if platform.system() != 'Windows':
                 # use sockets to avoid any future conflict with port numbers
@@ -184,7 +183,7 @@ class PostgresServer:
 
             self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
 
-        _logger.info(f"ensuring server is running: {self._postmaster_info=}")
+        _logger.info(f"Now asserting server is running {self._postmaster_info=}")
         assert self._postmaster_info is not None
         assert self._postmaster_info.is_running()
         assert self._postmaster_info.status == 'ready'

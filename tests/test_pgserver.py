@@ -195,9 +195,15 @@ def test_stale_postmaster():
         ( our method to kill the server is graceful to avoid running out of shmem, but this seems to also
             remove the postmaster.pid file, so we need to go to these lengths to simulate a stale postmaster.pid file )
     """
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        # on Linux as root, this test fails bc of permissions for the postmaster.pid file
+        # we simply skip it in this case, as in practice, the permissions issue would not occur
+        pytest.skip("This test is not run as root on Linux.")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
         pid2 = None
+
         try:
             with pgserver.get_server(tmpdir, cleanup_mode='stop') as pg:
                 pid = _check_server(pg)
