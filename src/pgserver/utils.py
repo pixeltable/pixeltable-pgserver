@@ -71,12 +71,9 @@ class PostmasterInfo:
         except psutil.NoSuchProcess:
             return
 
-        if self.start_time is None:
-            return
-
-        exact_create_time = datetime.datetime.fromtimestamp(process.create_time())
-        if abs(self.start_time - exact_create_time) <= datetime.timedelta(seconds=1):
-            self.process = process
+        self.process = process
+        # exact_create_time = datetime.datetime.fromtimestamp(process.create_time())
+        # if abs(self.start_time - exact_create_time) <= datetime.timedelta(seconds=1):
 
     def is_running(self) -> bool:
         return self.process is not None and self.process.is_running()
