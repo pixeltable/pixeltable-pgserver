@@ -143,7 +143,8 @@ class PostgresServer:
             if self._postmaster_info.status != 'ready':
                 _logger.warning(f"the server is running but not ready (unexpected) {self._postmaster_info=}")
         else:
-            _logger.info(f"no postgres server found running, assuming stale {self._postmaster_info=} {self._postmaster_info.process=}")
+            _logger.info(f"no postgres server found running, assuming stale {self._postmaster_info=} ")
+
 
             if platform.system() != 'Windows':
                 # use sockets to avoid any future conflict with port numbers
