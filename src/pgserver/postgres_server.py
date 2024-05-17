@@ -181,7 +181,19 @@ class PostgresServer:
                 _logger.error(f"Timeout starting server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}")
                 raise err
 
-            self._postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
+            while True:
+                # in Windows, when there is a postmaster.pid,  init_ctl seems to return
+                # but the file is not immediately updated, here we wait until the file shows
+                # a new running server. see test_stale_postmaster
+                _logger.info(f'waiting for postmaster info to show a running process')
+                pinfo =  PostmasterInfo.read_from_pgdata(self.pgdata)
+                _logger.info(f'running... checking if ready {pinfo=}')
+                if pinfo is not None and pinfo.is_running() and pinfo.status == 'ready':
+                    self._postmaster_info = pinfo
+                    break
+
+                _logger.info(f'not ready yet... waiting a bit more...')
+                time.sleep(1.)
 
         _logger.info(f"Now asserting server is running {self._postmaster_info=}")
         assert self._postmaster_info is not None
