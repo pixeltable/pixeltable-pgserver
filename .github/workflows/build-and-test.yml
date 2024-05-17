@@ -17,12 +17,16 @@ jobs:
         include:
           - os: macos-12
             arch: x86_64
+            deployment-target: '12.0'
           - os: macos-latest
             arch: arm64
+            deployment-target: '14.0'
           - os: ubuntu-latest
             arch: x86_64
+            deployment-target: ''
           - os: windows-2022
             arch: AMD64
+            deployment-target: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -69,7 +73,7 @@ jobs:
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
           CIBW_SKIP: pp* cp38-* *-musllinux*
-          MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macos-12' && '12.0' || '14.0' }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: python -m cibuildwheel --output-dir wheelhouse
       - name: Save postgres build
         if: ${{ matrix.os == 'ubuntu-latest' && ! steps.restore-postgres.outputs.cache-hit }}
