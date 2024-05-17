@@ -110,7 +110,7 @@ class PostgresServer:
             #
             # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
             # way to test this: python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
-            _logger.info('no PG_VERSION file found, initializing pgdata')
+            _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
             for proc in psutil.process_iter(attrs=['name', 'cmdline']):
                 if proc.info['name'] == 'postgres':
                     if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
@@ -138,11 +138,13 @@ class PostgresServer:
         postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
         if postmaster_info is not None and postmaster_info.is_running():
             self._postmaster_info = postmaster_info
-            _logger.info(f"server already running: {self._postmaster_info=} {self._postmaster_info.process=}")
+            _logger.info(f"a postgres server is already running: {self._postmaster_info=} {self._postmaster_info.process=}")
 
             if self._postmaster_info.status != 'ready':
-                _logger.warning(f"server running but somehow not ready: {self._postmaster_info=}")
+                _logger.warning(f"the server is running but not ready (unexpected) {self._postmaster_info=}")
         else:
+            _logger.info(f"no postgres server found running, assuming stale {self._postmaster_info=} {self._postmaster_info.process=}")
+
             if platform.system() != 'Windows':
                 # use sockets to avoid any future conflict with port numbers
                 socket_dir = find_suitable_socket_dir(self.pgdata, self.runtime_path)

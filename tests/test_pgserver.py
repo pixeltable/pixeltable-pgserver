@@ -15,6 +15,7 @@ import sqlalchemy as sa
 import datetime
 from sqlalchemy_utils import database_exists, create_database
 import logging
+import os
 
 def _check_sqlalchemy_works(srv : pgserver.PostgresServer):
     database_name = 'testdb'
@@ -172,6 +173,12 @@ def test_unix_domain_socket():
                 _kill_server(pid)
 
 def test_pg_ctl():
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        # on Linux root, this test would fail.
+        # we'd need to create a user etc to run the command, which is not worth it
+        # pgserver does this internally, but not worth it for this test
+        pytest.skip("This test is not run as root on Linux.")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
         try:
