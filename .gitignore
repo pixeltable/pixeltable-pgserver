@@ -129,6 +129,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Pycharm
+.idea
+
 build/
 pgbuild/
 src/pgserver/pginstall

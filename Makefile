@@ -14,7 +14,7 @@ install-dev: build
 	python -m pip install --force-reinstall -e .
 
 clean:
-	rm -rf build/ wheelhouse/ dist/
+	rm -rf build/ wheelhouse/ dist/ .eggs/
 	$(MAKE) -C pgbuild clean
 
 test:
