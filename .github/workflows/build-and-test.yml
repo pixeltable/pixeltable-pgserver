@@ -7,6 +7,7 @@ on:
   release:
     types:
       - created
+  workflow_dispatch:
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
@@ -17,10 +18,10 @@ jobs:
         include:
           - os: macos-12
             arch: x86_64
-            deployment-target: '12.0'
+            deployment-target: '10.9'
           - os: macos-latest
             arch: arm64
-            deployment-target: '14.0'
+            deployment-target: '11.0'
           - os: ubuntu-latest
             arch: x86_64
             deployment-target: ''
@@ -52,9 +53,12 @@ jobs:
           path: |
             pgbuild
             src/pgserver/pginstall
-          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{ hashFiles('Makefile', 'pgbuild/Makefile') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
+            hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build postgres and pgvector
         if: ${{ matrix.os != 'ubuntu-latest' && ! steps.restore-postgres.outputs.cache-hit }}
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         # this step is implied by Build wheels, but we do it here for caching before python tests run
         # on ubuntu, cibuildwheel will run this step within a docker container, so it cannot use the cache this way
         run: make
@@ -68,7 +72,8 @@ jobs:
           path: |
            pgbuild
            src/pgserver/pginstall
-          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{ hashFiles('Makefile', 'pgbuild/Makefile') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
+            hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build wheels
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
@@ -85,7 +90,8 @@ jobs:
           path: |
            pgbuild
            src/pgserver/pginstall
-          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{ hashFiles('Makefile', 'pgbuild/Makefile') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
+            hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - uses: actions/upload-artifact@v3
         with:
           path: wheelhouse/*.whl
