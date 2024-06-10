@@ -1,10 +1,13 @@
 ![Python Version](https://img.shields.io/badge/python-3.9%2C%203.10%2C%203.11%2C%203.12-blue)
-![Postrgres Version](https://img.shields.io/badge/PostgreSQL-16.2-blue)
+![Postgres Version](https://img.shields.io/badge/PostgreSQL-16.2-blue)
+
 ![Linux Support](https://img.shields.io/badge/Linux%20Support-manylinux-green)
 ![macOS Apple Silicon Support >=11](https://img.shields.io/badge/macOS%20Apple%20Silicon%20Support-%E2%89%A511(BigSur)-green)
 ![macOS Intel Support => 10.0](https://img.shields.io/badge/macOS%20Intel%20Support-%E2%89%A510.9-green)
 ![Windows Support >= 2022](https://img.shields.io/badge/Windows%20AMD64%20Support-%E2%89%A52022-green)
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-darkblue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![PyPI Package](https://img.shields.io/pypi/v/pgserver?color=darkorange)](https://pypi.org/project/pgserver)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pgserver)
 
 
