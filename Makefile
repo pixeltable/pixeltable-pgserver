@@ -1,5 +1,14 @@
 .DEFAULT_GOAL := build
-.PHONY: build wheel install-wheel install-dev clean test
+.PHONY: check-conda build wheel install-wheel install-dev clean test
+
+check-conda:
+ifdef CONDA_DEFAULT_ENV
+ifeq ($(CONDA_DEFAULT_ENV),base)
+	$(error pixeltable-pgserver must be installed from a conda environment (not `base`))
+endif
+else
+	$(error pixeltable-pgserver must be installed from a conda environment)
+endif
 
 build:
 	$(MAKE) -d -C pgbuild all
@@ -10,11 +19,11 @@ wheel: build
 install-wheel: wheel
 	python -m pip install --force-reinstall dist/*.whl
 
-install-dev: build
+install-dev: check-conda build
 	python -m pip install --force-reinstall -e .
 
 clean:
-	rm -rf build/ wheelhouse/ dist/ .eggs/
+	rm -rf .make-install build/ wheelhouse/ dist/ .eggs/
 	$(MAKE) -C pgbuild clean
 
 test:

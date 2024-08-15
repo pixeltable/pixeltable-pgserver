@@ -1,12 +1,18 @@
+[build-system]
+# These are the assumed default build requirements from pip:
+# https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
+requires = ["setuptools>=58.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "pgserver" # Required
-version = "0.1.4"  # Required
-description = "Self-contained postgres server for your python applications" # Required
-readme = "README.md" # Optional
+name = "pixeltable-pgserver"
+version = "0.2.1"
+description = "Embedded Postgres Server for Pixeltable"
+readme = "README.md"
 requires-python = ">=3.9"
-license = {file = "LICENSE.txt"}
-urls={repository="https://github.com/orm011/pgserver"}
-authors=[{ name="Oscar Moll", email="orm@csail.mit.edu" }]
+license = {file = "LICENSE"}
+urls={repository="https://github.com/pixeltable/pixeltable-pgserver"}
+authors=[{ name="Pixeltable, Inc.", email="contact@pixeltable.com" }]
 keywords=["postgresql", "pgvector", "pgserver", "rag"]
 dependencies = [
     "fasteners>=0.19",
@@ -36,9 +42,3 @@ testpaths = ["tests"]
 before-all = "make"
 test-extras = "test"
 test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
-
-[build-system]
-# These are the assumed default build requirements from pip:
-# https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
-requires = ["setuptools>=58.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
