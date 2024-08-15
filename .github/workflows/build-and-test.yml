@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.os }} / ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -25,8 +25,11 @@ jobs:
           - os: ubuntu-latest
             arch: x86_64
             deployment-target: ''
+          - os: ubuntu-arm64
+            arch: aarch64
+            deployment-target: ''
           - os: windows-2022
-            arch: AMD64
+            arch: amd64
             deployment-target: ''
     steps:
       - uses: actions/checkout@v4
@@ -104,14 +107,14 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/pixeltable-pgserver  # Replace <package-name> with your PyPI project name
+      url: https://pypi.org/p/pixeltable-pgserver
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
-        - name: Download all the dists
-          uses: actions/download-artifact@v3
-          with:
-            name: python-package-distributions
-            path: dist/
-        - name: Publish distribution 📦 to PyPI
-          uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Download all the dists
+        uses: actions/download-artifact@v3
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
