@@ -7,4 +7,4 @@
 build
 dist
 pgbuild
-src/pgserver/pginstall
+src/pixeltable_pgserver/pginstall

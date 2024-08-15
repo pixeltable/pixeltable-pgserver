@@ -1,1 +1,1 @@
-graft src/pgserver/pginstall
+graft src/pixeltable_pgserver/pginstall

@@ -15,7 +15,7 @@ from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, Postm
 if platform.system() != 'Windows':
     from .utils import ensure_user_exists, ensure_prefix_permissions, ensure_folder_permissions
 
-_logger = logging.getLogger('pgserver')
+_logger = logging.getLogger('pixeltable_pgserver')
 
 class PostgresServer:
     """ Provides a common interface for interacting with a server.

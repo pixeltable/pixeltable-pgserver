@@ -55,7 +55,7 @@ jobs:
         with:
           path: |
             pgbuild
-            src/pgserver/pginstall
+            src/pixeltable_pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build postgres and pgvector
@@ -74,7 +74,7 @@ jobs:
         with:
           path: |
            pgbuild
-           src/pgserver/pginstall
+           src/pixeltable_pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build wheels
@@ -92,7 +92,7 @@ jobs:
         with:
           path: |
            pgbuild
-           src/pgserver/pginstall
+           src/pixeltable_pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - uses: actions/upload-artifact@v3
