@@ -23,7 +23,7 @@ install-dev: check-conda build
 	python -m pip install --force-reinstall -e .
 
 clean:
-	rm -rf .make-install build/ wheelhouse/ dist/ .eggs/
+	rm -rf build/ wheelhouse/ dist/ .eggs/
 	$(MAKE) -C pgbuild clean
 
 test:
