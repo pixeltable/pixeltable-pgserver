@@ -28,10 +28,7 @@ jobs:
             arch: aarch64
             deployment-target: ''
           - os: windows-2022
-            arch: AMD64
-            deployment-target: ''
-          - os: windows-arm64
-            arch: ARM64
+            arch: 'AMD64 ARM64'
             deployment-target: ''
     steps:
       - uses: actions/checkout@v4
