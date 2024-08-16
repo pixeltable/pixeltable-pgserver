@@ -30,6 +30,9 @@ jobs:
           - os: windows-2022
             arch: AMD64
             deployment-target: ''
+          - os: windows-arm64
+            arch: ARM64
+            deployment-target: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
