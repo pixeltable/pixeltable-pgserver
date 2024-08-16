@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixeltable-pgserver"
-version = "0.2.2"
+version = "0.2.3"
 description = "Embedded Postgres Server for Pixeltable"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -42,3 +42,6 @@ testpaths = ["tests"]
 before-all = "make"
 test-extras = "test"
 test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
+
+[tool.cibuildwheel.linux]
+before-all = "yum install -y readline-devel; make"
