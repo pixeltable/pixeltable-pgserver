@@ -16,26 +16,26 @@ jobs:
       matrix:
         include:
           - os: macos-12
-            arch: x86_64
+            cibw-archs: x86_64
             deployment-target: '10.9'
           - os: macos-latest
-            arch: arm64
+            cibw-archs: arm64
             deployment-target: '11.0'
           - os: ubuntu-latest
-            arch: x86_64
+            cibw-archs: x86_64
             deployment-target: ''
-          # - os: ubuntu-arm64
-          #   arch: aarch64
-          #   deployment-target: ''
+          - os: ubuntu-arm64
+            cibw-archs: aarch64
+            deployment-target: ''
           - os: windows-2022
-            arch: AMD64
+            cibw-archs: 'AMD64 ARM64'
             deployment-target: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         with:
-          python-version: '3.10'
+          python-version: '3.11'
       - uses: actions/setup-python@v4
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
           # for testing due to docker env issues
@@ -78,7 +78,7 @@ jobs:
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build wheels
         env:
-          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_ARCHS: ${{ matrix.cibw-archs }}
           CIBW_SKIP: pp* cp313-* *-musllinux*
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: python -m cibuildwheel --output-dir wheelhouse
