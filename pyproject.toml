@@ -13,7 +13,7 @@ requires-python = ">=3.9"
 license = {file = "LICENSE"}
 urls={repository="https://github.com/pixeltable/pixeltable-pgserver"}
 authors=[{ name="Pixeltable, Inc.", email="contact@pixeltable.com" }]
-keywords=["postgresql", "pgvector", "pgserver", "rag"]
+keywords=["postgresql", "pgvector", "pgserver", "pixeltable", "rag"]
 dependencies = [
     "fasteners>=0.19",
     "platformdirs>=4.0.0",
@@ -33,7 +33,7 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
-include = ["pgserver*"]  # package names should match these glob patterns (["*"] by default)
+include = ["pixeltable_pgserver*"]  # package names should match these glob patterns (["*"] by default)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
