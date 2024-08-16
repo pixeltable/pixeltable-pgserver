@@ -59,10 +59,10 @@ jobs:
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build postgres and pgvector
         if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
+        # Run `make` now so that we may cache the postgres build before running cibuildwheel
+        # (On Linux cibuildwheel runs in a docker container, so this won't work)
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
-        # this step is implied by Build wheels, but we do it here for caching before python tests run
-        # on ubuntu, cibuildwheel will run this step within a docker container, so it cannot use the cache this way
         run: make
       - name: Save postgres build
         if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
@@ -82,18 +82,6 @@ jobs:
           CIBW_SKIP: pp* cp313-* *-musllinux*
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: python -m cibuildwheel --output-dir wheelhouse
-      - name: Save postgres build
-        if: ${{ startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
-        id: cache-postgres2
-        uses: actions/cache/save@v3
-        env:
-          cache-name: cache-postgres
-        with:
-          path: |
-           pgbuild
-           src/pixeltable_pgserver/pginstall
-          key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
-            hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - uses: actions/upload-artifact@v3
         with:
           path: wheelhouse/*.whl
