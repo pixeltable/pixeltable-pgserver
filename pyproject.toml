@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixeltable-pgserver"
-version = "0.2.1"
+version = "0.2.2"
 description = "Embedded Postgres Server for Pixeltable"
 readme = "README.md"
 requires-python = ">=3.9"
