@@ -1,5 +1,6 @@
 SHELL := /bin/bash
-INSTALL_PREFIX := $(shell pwd)/../src/pixeltable_pgserver/pginstall/
+INSTALL_RELPATH := ../src/pixeltable_pgserver/pginstall
+INSTALL_PREFIX := $(shell pwd)/$(INSTALL_RELPATH)
 BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
@@ -31,9 +32,14 @@ $(POSTGRES_BLD)/src/bin/initdb/initdb: $(POSTGRES_BLD)/config.status
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && $(MAKE) -C $(POSTGRES_BLD) -j
 
 ## install to INSTALL_PREFIX
+# On Windows, the Postgres build (in particular, the `zic` tool) fails to compile the timezone database into its proper
+# place. I don't know why this is; no error message is generated, though I suspect it's because the pathname is too
+# long, or something of that nature. In any case, we add an additional post-build step to manually compile the timezone
+# data using a shorter path reference, ensuring that it gets generated properly on Windows.
 $(INSTALL_PREFIX)/bin/postgres: $(POSTGRES_BLD)/config.status
 	mkdir -p $(INSTALL_PREFIX)
 	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS && $(MAKE) -C $(POSTGRES_BLD) install
+	$(POSTGRES_BLD)/src/timezone/zic -d $(INSTALL_RELPATH)/share/postgresql/timezone $(POSTGRES_BLD)/src/timezone/data/tzdata.zi
 
 .PHONY: postgres
 postgres: $(INSTALL_PREFIX)/bin/postgres
