@@ -39,6 +39,20 @@ def _check_sqlalchemy_works(srv : pixeltable_pgserver.PostgresServer):
         assert result
         assert result[0] == 1
 
+def _check_time_zones(srv : pixeltable_pgserver.PostgresServer):
+    # Check that time zone information was properly compiled
+    database_name = 'testdb'
+    uri = srv.get_uri(database_name)
+
+    if not database_exists(uri):
+        create_database(uri)
+
+    engine = sa.create_engine(uri)
+    conn = engine.connect()
+
+    with conn.begin():
+        conn.execute(sa.text("SET TIME ZONE 'America/Anchorage';"))
+
 def _check_postmaster_info(pgdata : Path, postmaster_info : pixeltable_pgserver.utils.PostmasterInfo):
     assert postmaster_info is not None
     assert postmaster_info.pgdata is not None
@@ -65,6 +79,7 @@ def _check_server(pg : pixeltable_pgserver.PostgresServer) -> int:
     ret_path = Path(ret.splitlines()[2].strip())
     assert pg.pgdata == ret_path
     _check_sqlalchemy_works(pg)
+    _check_time_zones(pg)
     return postmaster_info.pid
 
 def _kill_server(pid : Union[int,psutil.Process,None]) -> None:
