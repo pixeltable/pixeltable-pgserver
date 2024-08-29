@@ -80,6 +80,8 @@ jobs:
         env:
           CIBW_ARCHS: ${{ matrix.cibw-archs }}
           CIBW_SKIP: pp* cp313-* *-musllinux*
+          CIBW_DEPENDENCY_VERSIONS: pinned
+          CIBW_BUILD_VERBOSITY: 1
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v3
