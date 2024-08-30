@@ -10,6 +10,6 @@
 [![PyPI Package](https://img.shields.io/pypi/v/pixeltable-pgserver?color=darkorange)](https://pypi.org/project/pixeltable-pgserver/)
 </div>
 
-__pixeltable-pgserver__ is an embedded Postgres server used internally by [Pixeltable](https://github.com/pixeltable/pixeltable). It is a fork of [pgserver](https://github.com/orm011/pgserver) by Oscar Moll, which is itself a fork of [postgresql-wheel](https://github.com/michelp/postgresql-wheel) by Michel Pelletier.
+__pixeltable-pgserver__ is an embedded Postgres server used internally by [Pixeltable](https://github.com/pixeltable/pixeltable). It is a fork of Oscar Moll's [pgserver](https://github.com/orm011/pgserver), which is itself a fork of Michel Pelletier's [postgresql-wheel](https://github.com/michelp/postgresql-wheel).
 
 For Pixeltable documentation and installation instructions, visit the [main Pixeltable repo](https://github.com/pixeltable/pixeltable).
