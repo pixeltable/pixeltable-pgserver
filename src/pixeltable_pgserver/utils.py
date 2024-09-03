@@ -1,16 +1,15 @@
-from pathlib import Path
-import typing
-from typing import Optional, List, Dict
-import subprocess
+import datetime
+import hashlib
 import json
 import logging
-import hashlib
-import socket
 import platform
+import socket
 import stat
+import subprocess
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import psutil
-import datetime
-import shutil
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
@@ -87,16 +86,20 @@ class PostmasterInfo:
         lines = postmaster_file.read_text().splitlines()
         return cls(lines)
 
-    def get_uri(self, user : str = 'postgres', database : Optional[str] = None) -> str:
+    def get_uri(self, user: str = 'postgres', database: Optional[str] = None, driver: Optional[str] = None) -> str:
         """ Returns a connection uri string for the postgresql server using the information in postmaster.pid"""
         if database is None:
             database = user
+        if driver is None:
+            driver_suffix = ''
+        else:
+            driver_suffix = f'+{driver}'
 
         if self.socket_dir is not None:
-            return f"postgresql://{user}:@/{database}?host={self.socket_dir}"
+            return f"postgresql{driver_suffix}://{user}:@/{database}?host={self.socket_dir}"
         elif self.port is not None:
             assert self.hostname is not None
-            return f"postgresql://{user}:@{self.hostname}:{self.port}/{database}"
+            return f"postgresql{driver_suffix}://{user}:@{self.hostname}:{self.port}/{database}"
         else:
             raise RuntimeError("postmaster.pid does not contain port or socket information")
 

@@ -1,25 +1,27 @@
-import pytest
-import pixeltable_pgserver
+import logging
+import multiprocessing as mp
+import os
+import platform
+import shutil
+import socket
 import subprocess
 import tempfile
-from typing import Optional, Union
-import multiprocessing as mp
-import shutil
 from pathlib import Path
-import pixeltable_pgserver.utils
-import socket
-from pixeltable_pgserver.utils import find_suitable_port, process_is_running
-import psutil
-import platform
-import sqlalchemy as sa
-import datetime
-from sqlalchemy_utils import database_exists, create_database
-import logging
-import os
+from typing import Optional, Union
 
-def _check_sqlalchemy_works(srv : pixeltable_pgserver.PostgresServer):
+import psutil
+import pytest
+import sqlalchemy as sa
+from sqlalchemy_utils import create_database, database_exists
+
+import pixeltable_pgserver
+import pixeltable_pgserver.utils
+from pixeltable_pgserver.utils import find_suitable_port, process_is_running
+
+
+def _check_sqlalchemy_works(srv: pixeltable_pgserver.PostgresServer, driver: Optional[str] = None):
     database_name = 'testdb'
-    uri = srv.get_uri(database_name)
+    uri = srv.get_uri(database_name, driver)
 
     if not database_exists(uri):
         create_database(uri)
@@ -39,7 +41,7 @@ def _check_sqlalchemy_works(srv : pixeltable_pgserver.PostgresServer):
         assert result
         assert result[0] == 1
 
-def _check_time_zones(srv : pixeltable_pgserver.PostgresServer):
+def _check_time_zones(srv: pixeltable_pgserver.PostgresServer):
     # Check that time zone information was properly compiled
     database_name = 'testdb'
     uri = srv.get_uri(database_name)
@@ -78,7 +80,8 @@ def _check_server(pg : pixeltable_pgserver.PostgresServer) -> int:
     # parse second row (first two are headers)
     ret_path = Path(ret.splitlines()[2].strip())
     assert pg.pgdata == ret_path
-    _check_sqlalchemy_works(pg)
+    _check_sqlalchemy_works(pg, None)       # Test with psycopg2 (default)
+    _check_sqlalchemy_works(pg, 'psycopg')  # Test with psycopg3
     _check_time_zones(pg)
     return postmaster_info.pid
 
