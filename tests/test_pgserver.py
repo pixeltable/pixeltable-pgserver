@@ -19,11 +19,9 @@ import pixeltable_pgserver.utils
 from pixeltable_pgserver.utils import find_suitable_port, process_is_running
 
 
-def _check_sqlalchemy_works(srv: pixeltable_pgserver.PostgresServer, use_psycopg3: bool):
+def _check_sqlalchemy_works(srv: pixeltable_pgserver.PostgresServer, driver: Optional[str] = None):
     database_name = 'testdb'
-    uri = srv.get_uri(database_name)
-    if use_psycopg3:
-        uri = uri.replace('postgresql://', 'postgresql+psycopg://')
+    uri = srv.get_uri(database_name, driver)
 
     if not database_exists(uri):
         create_database(uri)
@@ -82,8 +80,8 @@ def _check_server(pg : pixeltable_pgserver.PostgresServer) -> int:
     # parse second row (first two are headers)
     ret_path = Path(ret.splitlines()[2].strip())
     assert pg.pgdata == ret_path
-    _check_sqlalchemy_works(pg, False)
-    _check_sqlalchemy_works(pg, True)
+    _check_sqlalchemy_works(pg, None)       # Test with psycopg2 (default)
+    _check_sqlalchemy_works(pg, 'psycopg')  # Test with psycopg3
     _check_time_zones(pg)
     return postmaster_info.pid
 

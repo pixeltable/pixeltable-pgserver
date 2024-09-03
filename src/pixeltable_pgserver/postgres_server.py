@@ -1,29 +1,30 @@
-from pathlib import Path
-from typing import Optional, Dict, Union
-import shutil
 import atexit
-import subprocess
-import os
 import logging
+import os
 import platform
-import psutil
+import shutil
+import subprocess
 import time
+from pathlib import Path
+from typing import Optional, Union
+
+import psutil
 
 from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
-from .utils import find_suitable_port, find_suitable_socket_dir, DiskList, PostmasterInfo, process_is_running
+from .utils import DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
 
 if platform.system() != 'Windows':
-    from .utils import ensure_user_exists, ensure_prefix_permissions, ensure_folder_permissions
+    from .utils import ensure_folder_permissions, ensure_prefix_permissions, ensure_user_exists
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
 class PostgresServer:
     """ Provides a common interface for interacting with a server.
     """
-    import platformdirs
     import fasteners
+    import platformdirs
 
-    _instances : Dict[Path, 'PostgresServer'] = {}
+    _instances : dict[Path, 'PostgresServer'] = {}
 
     # NB home does not always support locking, eg NFS or LUSTRE (eg some clusters)
     # so, use user_runtime_path instead, which seems to be in a local filesystem
@@ -75,10 +76,10 @@ class PostgresServer:
         """
         return self.get_postmaster_info().pid
 
-    def get_uri(self, database : Optional[str] = None) -> str:
+    def get_uri(self, database: Optional[str] = None, driver: Optional[str] = None) -> str:
         """ Returns a connection string for the postgresql server.
         """
-        return self.get_postmaster_info().get_uri(database=database)
+        return self.get_postmaster_info().get_uri(database=database, driver=driver)
 
     def ensure_pgdata_inited(self) -> None:
         """ Initializes the pgdata directory if it is not already initialized.

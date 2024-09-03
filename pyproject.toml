@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixeltable-pgserver"
-version = "0.2.6"
+version = "0.2.7"
 description = "Embedded Postgres Server for Pixeltable"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -31,6 +31,9 @@ test = [
     "sqlalchemy>=2",
     "sqlalchemy-utils"
 ]
+
+[tool.isort]
+line_length = 120
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
