@@ -10,7 +10,7 @@ from typing import Optional, Union
 
 import psutil
 
-from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl
+from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl  # type: ignore[attr-defined]
 from .utils import DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
 
 if platform.system() != 'Windows':
@@ -22,7 +22,7 @@ _logger = logging.getLogger('pixeltable_pgserver')
 class PostgresServer:
     """Provides a common interface for interacting with a server."""
 
-    import fasteners
+    import fasteners  # type: ignore[import-untyped]
     import platformdirs
 
     _instances: dict[Path, 'PostgresServer'] = {}
@@ -229,6 +229,7 @@ class PostgresServer:
 
             assert self.cleanup_mode in ['stop', 'delete']
             if self._postmaster_info is not None:
+                assert self._postmaster_info.process is not None
                 if self._postmaster_info.process.is_running():
                     try:
                         pg_ctl(['-w', 'stop'], pgdata=self.pgdata, user=self.system_user)

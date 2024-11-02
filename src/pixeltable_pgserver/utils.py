@@ -1,4 +1,3 @@
-import datetime
 import hashlib
 import json
 import logging
@@ -6,6 +5,7 @@ import platform
 import socket
 import stat
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -33,7 +33,17 @@ class PostmasterInfo:
         ```
     """
 
-    def __init__(self, lines: list[str]):
+    pid: int
+    pgdata: Path
+    start_time: datetime
+    socket_dir: Optional[Path]
+    hostname: Optional[str]
+    port: Optional[int]
+    shmem_info: str
+    status: str
+    process: Optional[psutil.Process]
+
+    def __init__(self, lines: list[str]) -> None:
         _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status']
         assert len(lines) == len(_lines), f'_lines: {_lines=} lines: {lines=}'
         clean_lines = [line.strip() for line in lines]
@@ -42,7 +52,7 @@ class PostmasterInfo:
 
         self.pid = int(raw['pid'])
         self.pgdata = Path(raw['pgdata'])
-        self.start_time = datetime.datetime.fromtimestamp(int(raw['start_time']))
+        self.start_time = datetime.fromtimestamp(int(raw['start_time']))
 
         if raw['socket_dir']:
             self.socket_dir = Path(raw['socket_dir'])
@@ -66,15 +76,13 @@ class PostmasterInfo:
         self.process = None  # will be not None if process is running
         self._init_process_meta()
 
-    def _init_process_meta(self) -> Optional[psutil.Process]:
+    def _init_process_meta(self) -> None:
         if self.pid is None:
             return
         try:
-            process = psutil.Process(self.pid)
+            self.process = psutil.Process(self.pid)
         except psutil.NoSuchProcess:
-            return
-
-        self.process = process
+            pass
         # exact_create_time = datetime.datetime.fromtimestamp(process.create_time())
         # if abs(self.start_time - exact_create_time) <= datetime.timedelta(seconds=1):
 
@@ -125,7 +133,11 @@ class PostmasterInfo:
         return None
 
     def __repr__(self) -> str:
-        return f'PostmasterInfo(pid={self.pid}, pgdata={self.pgdata}, start_time={self.start_time}, hostname={self.hostname} port={self.port}, socket_dir={self.socket_dir} status={self.status}, process={self.process})'
+        return (
+            f'PostmasterInfo(pid={self.pid}, pgdata={self.pgdata}, start_time={self.start_time}, '
+            f'hostname={self.hostname}, port={self.port}, socket_dir={self.socket_dir}, status={self.status}, '
+            f'process={self.process})'
+        )
 
     def __str__(self) -> str:
         return self.__repr__()

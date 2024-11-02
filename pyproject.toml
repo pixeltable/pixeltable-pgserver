@@ -30,7 +30,10 @@ test = [
     "psycopg2-binary==2.9.9",
     "psycopg[binary]==3.1.18",
     "sqlalchemy>=2",
-    "sqlalchemy-utils"
+    "sqlalchemy-utils",
+    "mypy",
+    "types-psutil",
+    "types-sqlalchemy-utils",
 ]
 
 [tool.isort]

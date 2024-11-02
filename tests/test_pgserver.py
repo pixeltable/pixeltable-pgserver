@@ -337,7 +337,7 @@ def _reuse_deleted_datadir(prefix: str):
         for _ in range(num_tries):
             assert not pgdata.exists()
 
-            queue_from_child = mp.Queue()
+            queue_from_child: mp.Queue = mp.Queue()
             child = mp.Process(target=_start_server_in_separate_process, args=(pgdata, None, queue_from_child, None))
             child.start()
             # wait for child to start server
@@ -347,7 +347,7 @@ def _reuse_deleted_datadir(prefix: str):
             assert server_proc.is_running()
             server_processes.append(server_proc)
             postmaster = pixeltable_pgserver.utils.PostmasterInfo.read_from_pgdata(pgdata)
-
+            assert postmaster is not None
             if postmaster.shmget_id is not None:
                 shmem_ids.append(postmaster.shmget_id)
 
@@ -362,7 +362,7 @@ def _reuse_deleted_datadir(prefix: str):
             # done this way because of CI/CD issues with sysv_ipc
             # this avoids having to restart the machine to clear the shared memory
             try:
-                import sysv_ipc
+                import sysv_ipc  # type: ignore[import-not-found]
 
                 do_shmem_cleanup = True
             except ImportError:
