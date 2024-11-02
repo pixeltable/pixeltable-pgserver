@@ -1,9 +1,9 @@
-from pathlib import Path
-import sys
-import subprocess
-from typing import Optional, List, Callable
 import logging
+import subprocess
+import sys
 import tempfile
+from pathlib import Path
+from typing import Callable, List, Optional
 
 POSTGRES_BIN_PATH = Path(__file__).parent / "pginstall" / "bin"
 

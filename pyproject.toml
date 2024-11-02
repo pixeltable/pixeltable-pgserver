@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "ruff",
     "sysv_ipc",
 ]
 test = [
@@ -49,3 +50,17 @@ test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 [tool.cibuildwheel.linux]
 before-all = "yum install -y readline-devel; make"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "C", "I", "N", "B", "A", "ICN", "PYI", "SIM", "TD002", "PL", "RUF"]
+ignore = ["PLC0415", "PLR0904", "PLR0912", "PLR0913", "PLR0914", "PLR0915", "PLR2004"]
+preview = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["pixeltable_pgserver"]
+
+[tool.ruff.format]
+quote-style = "single"  # can be "single", "double", or "preserve"
