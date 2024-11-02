@@ -3,7 +3,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
 
@@ -11,7 +11,7 @@ _logger = logging.getLogger('pixeltable_pgserver')
 
 
 def create_command_function(pg_exe_name: str) -> Callable:
-    def command(args: List[str], pgdata: Optional[Path] = None, **kwargs) -> str:
+    def command(args: list[str], pgdata: Optional[Path] = None, **kwargs) -> str:
         """
         Run a command with the given command line arguments.
         Args:

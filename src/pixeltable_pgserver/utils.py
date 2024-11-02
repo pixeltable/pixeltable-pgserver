@@ -7,9 +7,12 @@ import socket
 import stat
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 import psutil
+
+if TYPE_CHECKING:
+    import pwd
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
@@ -30,12 +33,12 @@ class PostmasterInfo:
         ```
     """
 
-    def __init__(self, lines: List[str]):
+    def __init__(self, lines: list[str]):
         _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status']
         assert len(lines) == len(_lines), f'_lines: {_lines=} lines: {lines=}'
         clean_lines = [line.strip() for line in lines]
 
-        raw: Dict[str, str] = dict(zip(_lines, clean_lines))
+        raw: dict[str, str] = dict(zip(_lines, clean_lines))
 
         self.pid = int(raw['pid'])
         self.pgdata = Path(raw['pgdata'])
@@ -195,7 +198,7 @@ class DiskList:
     def __init__(self, path: Path):
         self.path = path
 
-    def get_and_add(self, value: int) -> List[int]:
+    def get_and_add(self, value: int) -> list[int]:
         old_values = self.get()
         values = old_values.copy()
         if value not in values:
@@ -203,7 +206,7 @@ class DiskList:
             self.put(values)
         return old_values
 
-    def get_and_remove(self, value: int) -> List[int]:
+    def get_and_remove(self, value: int) -> list[int]:
         old_values = self.get()
         values = old_values.copy()
         if value in values:
@@ -211,12 +214,12 @@ class DiskList:
             self.put(values)
         return old_values
 
-    def get(self) -> List[int]:
+    def get(self) -> list[int]:
         if not self.path.exists():
             return []
         return json.loads(self.path.read_text())
 
-    def put(self, values: List[int]) -> None:
+    def put(self, values: list[int]) -> None:
         self.path.write_text(json.dumps(values))
 
 
