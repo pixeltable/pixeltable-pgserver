@@ -33,13 +33,14 @@ def _check_sqlalchemy_works(srv: pixeltable_pgserver.PostgresServer, driver: Opt
     with conn.begin():
         # if table exists already, drop it
         if engine.dialect.has_table(conn, table_name):
-            conn.execute(sa.text(f"drop table {table_name};"))
-        conn.execute(sa.text(f"create table {table_name} (id int);"))
-        conn.execute(sa.text(f"insert into {table_name} values (1);"))
-        cur = conn.execute(sa.text(f"select * from {table_name};"))
+            conn.execute(sa.text(f'drop table {table_name};'))
+        conn.execute(sa.text(f'create table {table_name} (id int);'))
+        conn.execute(sa.text(f'insert into {table_name} values (1);'))
+        cur = conn.execute(sa.text(f'select * from {table_name};'))
         result = cur.fetchone()
         assert result
         assert result[0] == 1
+
 
 def _check_time_zones(srv: pixeltable_pgserver.PostgresServer):
     # Check that time zone information was properly compiled
@@ -55,7 +56,8 @@ def _check_time_zones(srv: pixeltable_pgserver.PostgresServer):
     with conn.begin():
         conn.execute(sa.text("SET TIME ZONE 'America/Anchorage';"))
 
-def _check_postmaster_info(pgdata : Path, postmaster_info : pixeltable_pgserver.utils.PostmasterInfo):
+
+def _check_postmaster_info(pgdata: Path, postmaster_info: pixeltable_pgserver.utils.PostmasterInfo):
     assert postmaster_info is not None
     assert postmaster_info.pgdata is not None
     assert postmaster_info.pgdata == pgdata
@@ -69,23 +71,24 @@ def _check_postmaster_info(pgdata : Path, postmaster_info : pixeltable_pgserver.
         assert postmaster_info.socket_path.is_socket()
 
 
-def _check_server(pg : pixeltable_pgserver.PostgresServer) -> int:
+def _check_server(pg: pixeltable_pgserver.PostgresServer) -> int:
     assert pg.pgdata.exists()
     postmaster_info = pixeltable_pgserver.utils.PostmasterInfo.read_from_pgdata(pg.pgdata)
     assert postmaster_info is not None
     assert postmaster_info.pid is not None
     _check_postmaster_info(pg.pgdata, postmaster_info)
 
-    ret = pg.psql("show data_directory;")
+    ret = pg.psql('show data_directory;')
     # parse second row (first two are headers)
     ret_path = Path(ret.splitlines()[2].strip())
     assert pg.pgdata == ret_path
-    _check_sqlalchemy_works(pg, None)       # Test with psycopg2 (default)
+    _check_sqlalchemy_works(pg, None)  # Test with psycopg2 (default)
     _check_sqlalchemy_works(pg, 'psycopg')  # Test with psycopg3
     _check_time_zones(pg)
     return postmaster_info.pid
 
-def _kill_server(pid : Union[int,psutil.Process,None]) -> None:
+
+def _kill_server(pid: Union[int, psutil.Process, None]) -> None:
     if pid is None:
         return
     elif isinstance(pid, psutil.Process):
@@ -97,14 +100,15 @@ def _kill_server(pid : Union[int,psutil.Process,None]) -> None:
             return
 
     if proc.is_running():
-        proc.terminate() # attempt cleaner shutdown
+        proc.terminate()  # attempt cleaner shutdown
         try:
-            proc.wait(3) # wait at most a few seconds
+            proc.wait(3)  # wait at most a few seconds
         except psutil.TimeoutExpired:
             pass
 
         if proc.is_running():
             proc.kill()
+
 
 def test_get_port():
     address = '127.0.0.1'
@@ -115,10 +119,11 @@ def test_get_port():
         sock.bind((address, port))
     except OSError as err:
         if 'Address already in use' in str(err):
-            raise RuntimeError(f"Port {port} is already in use.")
+            raise RuntimeError(f'Port {port} is already in use.')
         raise err
     finally:
         sock.close()
+
 
 def test_get_server():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -140,6 +145,7 @@ def test_get_server():
         finally:
             _kill_server(pid)
 
+
 def test_reentrant():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -157,20 +163,24 @@ def test_reentrant():
         finally:
             _kill_server(pid)
 
-def _start_server_in_separate_process(pgdata, queue_in : Optional[mp.Queue], queue_out : mp.Queue, cleanup_mode : Optional[str]):
+
+def _start_server_in_separate_process(
+    pgdata, queue_in: Optional[mp.Queue], queue_out: mp.Queue, cleanup_mode: Optional[str]
+):
     with pixeltable_pgserver.get_server(pgdata, cleanup_mode=cleanup_mode) as pg:
         pid = _check_server(pg)
         queue_out.put(pid)
 
         if queue_in is not None:
-            _ = queue_in.get() # wait for signal
+            _ = queue_in.get()  # wait for signal
             return
+
 
 def test_unix_domain_socket():
     if platform.system() == 'Windows':
-        pytest.skip("This test is for unix domain sockets, which are not available on Windows.")
+        pytest.skip('This test is for unix domain sockets, which are not available on Windows.')
 
-    long_prefix = '_'.join(['long'] + ['1234567890']*12)
+    long_prefix = '_'.join(['long'] + ['1234567890'] * 12)
     assert len(long_prefix) > 120
     prefixes = ['short', long_prefix]
 
@@ -190,12 +200,13 @@ def test_unix_domain_socket():
             finally:
                 _kill_server(pid)
 
+
 def test_pg_ctl():
     if platform.system() != 'Windows' and os.geteuid() == 0:
         # on Linux root, this test would fail.
         # we'd need to create a user etc to run the command, which is not worth it
         # pixeltable_pgserver does this internally, but not worth it for this test
-        pytest.skip("This test is not run as root on Linux.")
+        pytest.skip('This test is not run as root on Linux.')
 
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -207,16 +218,17 @@ def test_pg_ctl():
         finally:
             _kill_server(pid)
 
+
 def test_stale_postmaster():
-    """  To simulate a stale postmaster.pid file, we create a postmaster.pid file by starting a server,
-        back the file up, then restore the backup to the original location after killing the server.
-        ( our method to kill the server is graceful to avoid running out of shmem, but this seems to also
-            remove the postmaster.pid file, so we need to go to these lengths to simulate a stale postmaster.pid file )
+    """To simulate a stale postmaster.pid file, we create a postmaster.pid file by starting a server,
+    back the file up, then restore the backup to the original location after killing the server.
+    ( our method to kill the server is graceful to avoid running out of shmem, but this seems to also
+        remove the postmaster.pid file, so we need to go to these lengths to simulate a stale postmaster.pid file )
     """
     if platform.system() != 'Windows' and os.geteuid() == 0:
         # on Linux as root, this test fails bc of permissions for the postmaster.pid file
         # we simply skip it in this case, as in practice, the permissions issue would not occur
-        pytest.skip("This test is not run as root on Linux.")
+        pytest.skip('This test is not run as root on Linux.')
 
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -252,6 +264,7 @@ def test_cleanup_delete():
         finally:
             _kill_server(pid)
 
+
 def test_cleanup_none():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -264,19 +277,21 @@ def test_cleanup_none():
         finally:
             _kill_server(pid)
 
+
 @pytest.fixture
 def tmp_postgres():
     tmp_pg_data = tempfile.mkdtemp()
     with pixeltable_pgserver.get_server(tmp_pg_data, cleanup_mode='delete') as pg:
         yield pg
 
+
 def test_pgvector(tmp_postgres):
-    ret = tmp_postgres.psql("CREATE EXTENSION vector;")
-    assert ret.strip() == "CREATE EXTENSION"
+    ret = tmp_postgres.psql('CREATE EXTENSION vector;')
+    assert ret.strip() == 'CREATE EXTENSION'
+
 
 def test_start_failure_log(caplog):
-    """ Test server log contents are shown in python log when failures
-    """
+    """Test server log contents are shown in python log when failures"""
     with tempfile.TemporaryDirectory() as tmpdir:
         with pixeltable_pgserver.get_server(tmpdir) as _:
             pass
@@ -293,8 +308,7 @@ def test_start_failure_log(caplog):
 
 
 def test_no_conflict():
-    """ test we can start pixeltable_pgservers on two different datadirs with no conflict (eg port conflict)
-    """
+    """test we can start pixeltable_pgservers on two different datadirs with no conflict (eg port conflict)"""
     pid1 = None
     pid2 = None
     try:
@@ -308,7 +322,7 @@ def test_no_conflict():
 
 
 def _reuse_deleted_datadir(prefix: str):
-    """ test common scenario where we repeatedly delete the datadir and start a new server on it """
+    """test common scenario where we repeatedly delete the datadir and start a new server on it"""
     """ NB: currently this test is not reproducing the problem """
     # one can reproduce the problem by running the following in a loop:
     # python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
@@ -323,7 +337,7 @@ def _reuse_deleted_datadir(prefix: str):
         for _ in range(num_tries):
             assert not pgdata.exists()
 
-            queue_from_child = mp.Queue()
+            queue_from_child: mp.Queue = mp.Queue()
             child = mp.Process(target=_start_server_in_separate_process, args=(pgdata, None, queue_from_child, None))
             child.start()
             # wait for child to start server
@@ -333,7 +347,7 @@ def _reuse_deleted_datadir(prefix: str):
             assert server_proc.is_running()
             server_processes.append(server_proc)
             postmaster = pixeltable_pgserver.utils.PostmasterInfo.read_from_pgdata(pgdata)
-
+            assert postmaster is not None
             if postmaster.shmget_id is not None:
                 shmem_ids.append(postmaster.shmget_id)
 
@@ -348,50 +362,54 @@ def _reuse_deleted_datadir(prefix: str):
             # done this way because of CI/CD issues with sysv_ipc
             # this avoids having to restart the machine to clear the shared memory
             try:
-                import sysv_ipc
+                import sysv_ipc  # type: ignore[import-not-found]
+
                 do_shmem_cleanup = True
             except ImportError:
                 do_shmem_cleanup = False
-                logging.warning("sysv_ipc not installed, skipping shared memory cleanup...")
+                logging.warning('sysv_ipc not installed, skipping shared memory cleanup...')
 
             if do_shmem_cleanup:
                 for shmid in shmem_ids:
                     try:
                         sysv_ipc.remove_shared_memory(shmid)
                     except sysv_ipc.ExistentialError as e:
-                        logging.info(f"shared memory already removed: {e}")
+                        logging.info(f'shared memory already removed: {e}')
 
         for proc in server_processes:
             _kill_server(proc)
 
     shutil.rmtree(tmpdir)
 
+
 def test_reuse_deleted_datadir_short():
-    """ test that new server starts normally on same datadir after datadir is deleted
-    """
+    """test that new server starts normally on same datadir after datadir is deleted"""
     _reuse_deleted_datadir('short_prefix')
 
+
 def test_reuse_deleted_datadir_long():
-    """ test that new server starts normally on same datadir after datadir is deleted
-    """
-    long_prefix = '_'.join(['long_prefix'] + ['1234567890']*12)
+    """test that new server starts normally on same datadir after datadir is deleted"""
+    long_prefix = '_'.join(['long_prefix'] + ['1234567890'] * 12)
     assert len(long_prefix) > 120
     _reuse_deleted_datadir(long_prefix)
 
-def test_multiprocess_shared():
-    """ Test that multiple processes can share the same server.
 
-        1. get server in a child process,
-        2. then, get server in the parent process
-        3. then, exiting the child process
-        4. checking the parent can still use the server.
+def test_multiprocess_shared():
+    """Test that multiple processes can share the same server.
+
+    1. get server in a child process,
+    2. then, get server in the parent process
+    3. then, exiting the child process
+    4. checking the parent can still use the server.
     """
     pid = None
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             queue_to_child = mp.Queue()
             queue_from_child = mp.Queue()
-            child = mp.Process(target=_start_server_in_separate_process, args=(tmpdir,queue_to_child,queue_from_child, 'stop'))
+            child = mp.Process(
+                target=_start_server_in_separate_process, args=(tmpdir, queue_to_child, queue_from_child, 'stop')
+            )
             child.start()
             # wait for child to start server
             server_pid_child = queue_from_child.get()

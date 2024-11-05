@@ -20,7 +20,7 @@ install-wheel: wheel
 	python -m pip install --force-reinstall dist/*.whl
 
 install-dev: check-conda build
-	python -m pip install --force-reinstall -e .
+	python -m pip install --force-reinstall -e .[dev,test]
 
 clean:
 	rm -rf build/ wheelhouse/ dist/ .eggs/
