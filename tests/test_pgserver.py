@@ -45,7 +45,7 @@ def _check_sqlalchemy_works(srv: pixeltable_pgserver.PostgresServer, driver: Opt
 def _check_time_zones(srv: pixeltable_pgserver.PostgresServer):
     # Check that time zone information was properly compiled
     database_name = 'testdb'
-    uri = srv.get_uri(database_name)
+    uri = srv.get_uri(database_name, 'psycopg')
 
     if not database_exists(uri):
         create_database(uri)
@@ -82,8 +82,7 @@ def _check_server(pg: pixeltable_pgserver.PostgresServer) -> int:
     # parse second row (first two are headers)
     ret_path = Path(ret.splitlines()[2].strip())
     assert pg.pgdata == ret_path
-    _check_sqlalchemy_works(pg, None)  # Test with psycopg2 (default)
-    _check_sqlalchemy_works(pg, 'psycopg')  # Test with psycopg3
+    _check_sqlalchemy_works(pg, 'psycopg')  # Use psycopg3 driver
     _check_time_zones(pg)
     return postmaster_info.pid
 
