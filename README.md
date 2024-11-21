@@ -1,5 +1,5 @@
 <div align="center">
-<img src="https://raw.githubusercontent.com/pixeltable/pixeltable/main/docs/source/data/pixeltable-logo-large.png" alt="Pixeltable" width="45%" />
+<img src="https://raw.githubusercontent.com/pixeltable/pixeltable/main/docs/resources/pixeltable-logo-large.png" alt="Pixeltable" width="45%" />
 <p></p>
 
 
