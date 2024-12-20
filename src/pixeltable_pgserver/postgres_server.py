@@ -29,8 +29,8 @@ class PostgresServer:
 
     # NB home does not always support locking, eg NFS or LUSTRE (eg some clusters)
     # so, use user_runtime_path instead, which seems to be in a local filesystem
-    runtime_path: Path = platformdirs.user_runtime_path('python_PostgresServer')
-    lock_path = platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile'
+    runtime_path: Path = platformdirs.user_runtime_path('python_PostgresServer', ensure_exists=True)
+    lock_path = runtime_path / '.lockfile'
     _lock = fasteners.InterProcessLock(lock_path)
 
     def __init__(self, pgdata: Path, *, cleanup_mode: Optional[str] = 'stop'):
