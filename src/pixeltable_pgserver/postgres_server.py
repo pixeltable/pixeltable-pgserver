@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional, Union
@@ -27,10 +28,12 @@ class PostgresServer:
 
     _instances: dict[Path, 'PostgresServer'] = {}
 
-    # NB home does not always support locking, eg NFS or LUSTRE (eg some clusters)
-    # so, use user_runtime_path instead, which seems to be in a local filesystem
     runtime_path: Path = platformdirs.user_runtime_path('python_PostgresServer')
-    lock_path = platformdirs.user_runtime_path('python_PostgresServer') / '.lockfile'
+    if not runtime_path.exists():
+        # On some Linux systems, this directory does not necessarily exist, and there is no obvious way to create it
+        # at this time. Fall back on the temporary directory.
+        runtime_path = Path(tempfile.gettempdir())
+    lock_path = runtime_path / '.lockfile'
     _lock = fasteners.InterProcessLock(lock_path)
 
     def __init__(self, pgdata: Path, *, cleanup_mode: Optional[str] = 'stop'):
