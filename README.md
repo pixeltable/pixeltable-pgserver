@@ -1,7 +1,7 @@
 <div align="center">
-<img src="https://raw.githubusercontent.com/pixeltable/pixeltable/main/docs/resources/pixeltable-logo-large.png" alt="Pixeltable" width="45%" />
+<img src="https://raw.githubusercontent.com/pixeltable/pixeltable/release/docs/resources/pixeltable-logo-large.png"
+     alt="Pixeltable" width="45%" />
 <p></p>
-
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-darkblue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pixeltable?logo=python&logoColor=white)
@@ -11,6 +11,10 @@
 [![PyPI Package](https://img.shields.io/pypi/v/pixeltable-pgserver?color=4D148C)](https://pypi.org/project/pixeltable-pgserver/)
 </div>
 
-__pixeltable-pgserver__ is an embedded Postgres server used internally by [Pixeltable](https://github.com/pixeltable/pixeltable). It is a fork of Oscar Moll's [pgserver](https://github.com/orm011/pgserver), which is itself a fork of Michel Pelletier's [postgresql-wheel](https://github.com/michelp/postgresql-wheel).
+__pixeltable-pgserver__ is an embedded Postgres server used internally by
+[Pixeltable](https://github.com/pixeltable/pixeltable). It is a fork of Oscar Moll's
+[pgserver](https://github.com/orm011/pgserver), which is itself a fork of Michel Pelletier's
+[postgresql-wheel](https://github.com/michelp/postgresql-wheel).
 
-For Pixeltable documentation and installation instructions, visit the main [Pixeltable project page](https://github.com/pixeltable/pixeltable).
+For Pixeltable documentation and installation instructions, visit the main
+[Pixeltable repository](https://github.com/pixeltable/pixeltable).
