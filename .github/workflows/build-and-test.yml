@@ -17,7 +17,7 @@ jobs:
         include:
           - os: macos-13
             cibw-archs: x86_64
-            deployment-target: '10.9'
+            deployment-target: '10.13'
           - os: macos-latest
             cibw-archs: arm64
             deployment-target: '11.0'
@@ -66,15 +66,15 @@ jobs:
           cache-name: cache-postgres
         with:
           path: |
-           pgbuild
-           src/pixeltable_pgserver/pginstall
+            pgbuild
+            src/pixeltable_pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build wheels
         env:
           CIBW_ARCHS: ${{ matrix.cibw-archs }}
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_SKIP: pp* *-musllinux*
+          CIBW_SKIP: cp314t* *-musllinux*
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v4
