@@ -28,10 +28,7 @@ jobs:
             cibw-archs: aarch64
             deployment-target: ''
           - os: windows-2022
-            cibw-archs: AMD64
-            deployment-target: ''
-          - os: windows-11-arm
-            cibw-archs: ARM64
+            cibw-archs: 'AMD64 ARM64'
             deployment-target: ''
     steps:
       - uses: actions/checkout@v4
