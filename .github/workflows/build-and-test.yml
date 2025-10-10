@@ -15,16 +15,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13
+          - os: macos-15-intel
             cibw-archs: x86_64
-            deployment-target: '10.9'
+            deployment-target: '10.13'
           - os: macos-latest
             cibw-archs: arm64
             deployment-target: '11.0'
           - os: ubuntu-latest
             cibw-archs: x86_64
             deployment-target: ''
-          - os: ubuntu-arm64
+          - os: ubuntu-24.04-arm
             cibw-archs: aarch64
             deployment-target: ''
           - os: windows-2022
@@ -33,14 +33,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         with:
           python-version: '3.11'
-      - uses: actions/setup-python@v4
-        if: ${{ startsWith(matrix.os, 'ubuntu') }}
-          # for testing due to docker env issues
-        with:
-          python-version: '3.9'
       - name: Install cibuildwheel
         run: |
           python -m pip install --upgrade pip
@@ -72,15 +66,15 @@ jobs:
           cache-name: cache-postgres
         with:
           path: |
-           pgbuild
-           src/pixeltable_pgserver/pginstall
+            pgbuild
+            src/pixeltable_pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build wheels
         env:
           CIBW_ARCHS: ${{ matrix.cibw-archs }}
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_SKIP: pp* *-musllinux*
+          CIBW_SKIP: cp314t* *-musllinux*
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v4

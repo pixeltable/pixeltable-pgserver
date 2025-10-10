@@ -6,11 +6,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixeltable-pgserver"
-version = "0.3.1"
+version = "0.4.0"
 description = "Embedded Postgres Server for Pixeltable"
 authors = [{ name = "Pixeltable, Inc.", email = "contact@pixeltable.com" }]
+requires-python = ">=3.10"
 readme = "README.md"
-requires-python = ">=3.9"
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
@@ -18,11 +18,11 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Database",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -45,7 +45,7 @@ dev = [
 ]
 test = [
     "pytest",
-    "psycopg[binary]>=3.1.18",
+    "psycopg[binary]>=3.2",
     "sqlalchemy>=2",
     "sqlalchemy-utils",
     "mypy",
