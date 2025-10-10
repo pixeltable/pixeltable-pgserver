@@ -45,7 +45,7 @@ dev = [
 ]
 test = [
     "pytest",
-    "psycopg[binary]>=3.2",
+    "psycopg>=3.2",
     "sqlalchemy>=2",
     "sqlalchemy-utils",
     "mypy",
