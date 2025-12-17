@@ -69,7 +69,7 @@ test-extras = "test"
 test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 [tool.cibuildwheel.linux]
-before-all = "yum install -y readline-devel openssl-devel clang && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && make"
+before-all = "yum install -y readline-devel openssl-devel zlib-devel bison flex perl gcc gcc-c++ make jq clang && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && make"
 
 [tool.cibuildwheel.macos]
 # Rust should be available; just source cargo env
