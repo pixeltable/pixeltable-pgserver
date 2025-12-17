@@ -27,9 +27,6 @@ jobs:
           - os: ubuntu-24.04-arm
             cibw-archs: aarch64
             deployment-target: ''
-          - os: windows-2022
-            cibw-archs: 'AMD64 ARM64'
-            deployment-target: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -40,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade cibuildwheel
       - name: Restore postgres build from cache
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        if: ${{ contains(matrix.os, 'macos') }}
         id: restore-postgres
         uses: actions/cache/restore@v3
         env:
@@ -52,14 +49,14 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
       - name: Build postgres and pgvector
-        if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
+        if: ${{ contains(matrix.os, 'macos') && !steps.restore-postgres.outputs.cache-hit }}
         # Run `make` now so that we may cache the postgres build before running cibuildwheel
         # (On Linux cibuildwheel runs in a docker container, so this won't work)
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: make
       - name: Save postgres build
-        if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
+        if: ${{ contains(matrix.os, 'macos') && !steps.restore-postgres.outputs.cache-hit }}
         id: cache-postgres
         uses: actions/cache/save@v3
         env:

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixeltable-pgserver"
-version = "0.4.0"
+version = "0.5.0"
 description = "Embedded Postgres Server for Pixeltable"
 authors = [{ name = "Pixeltable, Inc.", email = "contact@pixeltable.com" }]
 requires-python = ">=3.10"
@@ -64,12 +64,20 @@ include = ["pixeltable_pgserver*"]  # package names should match these glob patt
 testpaths = ["tests"]
 
 [tool.cibuildwheel]
-before-all = "make"
+before-all = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && make"
 test-extras = "test"
 test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 [tool.cibuildwheel.linux]
-before-all = "yum install -y readline-devel; make"
+before-all = "yum install -y readline-devel openssl-devel zlib-devel bison flex perl gcc gcc-c++ make jq clang && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && make"
+
+[tool.cibuildwheel.macos]
+# Rust should be available; just source cargo env
+before-all = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && make"
+
+[tool.cibuildwheel.windows]
+# Windows needs special Rust setup
+before-all = "choco install rust -y && make"
 
 [tool.ruff]
 line-length = 120
