@@ -3,7 +3,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
 
@@ -11,12 +11,12 @@ _logger = logging.getLogger('pixeltable_pgserver')
 
 
 def create_command_function(pg_exe_name: str) -> Callable:
-    def command(args: list[str], pgdata: Optional[Path] = None, **kwargs) -> str:
+    def command(args: Sequence[str], pgdata: Optional[Path] = None, **kwargs) -> str:
         """
         Run a command with the given command line arguments.
         Args:
             args: The command line arguments to pass to the command as a string,
-            a list of options as would be passed to `subprocess.run`
+                a list of options as would be passed to `subprocess.run`
             pgdata: The path to the data directory to use for the command.
                 If the command does not need a data directory, this should be None.
             kwargs: Additional keyword arguments to pass to `subprocess.run`, eg user, timeout.
@@ -28,9 +28,9 @@ def create_command_function(pg_exe_name: str) -> Callable:
             assert pgdata is not None, 'pgdata must be provided for initdb, pg_ctl, and pg_dump'
 
         if pgdata is not None:
-            args = ['-D', str(pgdata)] + args
+            args = ('-D', str(pgdata), *args)
 
-        full_command_line = [str(POSTGRES_BIN_PATH / pg_exe_name)] + args
+        full_command_line = (str(POSTGRES_BIN_PATH / pg_exe_name), *args)
 
         with tempfile.TemporaryFile('w+') as stdout, tempfile.TemporaryFile('w+') as stderr:
             try:

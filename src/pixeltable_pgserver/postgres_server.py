@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import psutil
 
@@ -18,6 +18,10 @@ if platform.system() != 'Windows':
     from .utils import ensure_folder_permissions, ensure_prefix_permissions, ensure_user_exists
 
 _logger = logging.getLogger('pixeltable_pgserver')
+
+# Windows process creation flags
+CREATE_NEW_PROCESS_GROUP = 0x00000200
+CREATE_NO_WINDOW = 0x08000000
 
 
 class PostgresServer:
@@ -150,6 +154,9 @@ class PostgresServer:
             if postmaster_info is None:
                 _logger.info(f'no postmaster.pid file found in {self.pgdata}')
 
+            postgres_args: str
+            process_kwargs: dict[str, Any]
+
             if platform.system() != 'Windows':
                 # use sockets to avoid any future conflict with port numbers
                 socket_dir = find_suitable_socket_dir(self.pgdata, self.runtime_path)
@@ -158,45 +165,40 @@ class PostgresServer:
                     ensure_prefix_permissions(socket_dir)
                     socket_dir.chmod(0o777)
 
-                pg_ctl_args = [
-                    '-w',  # wait for server to start
-                    '-o',
-                    '-h ""',  # no listening on any IP addresses (forwarded to postgres exec) see man postgres for -hj
-                    '-o',
-                    f'-k {socket_dir}',  # socket option (forwarded to postgres exec) see man postgres for -k
-                    '-l',
-                    str(self.log),  # log location: set to pgdata dir also
-                    'start',  # action
-                ]
-            else:  # Windows,
+                # no listening on any IP addresses (forwarded to postgres exec) see man postgres for -hj
+                # socket option (forwarded to postgres exec) see man postgres for -k
+                postgres_args = f'-h "" -k {socket_dir}'
+                process_kwargs = {}
+
+            else:  # Windows
                 socket_dir = None
                 # socket.AF_UNIX is undefined when running on Windows, so default to a port
                 host = '127.0.0.1'
                 port = find_suitable_port(host)
-                pg_ctl_args = [
-                    '-w',  # wait for server to start
-                    '-o',
-                    f'-h "{host}"',
-                    '-o',
-                    f'-p {port}',
-                    '-l',
-                    str(self.log),  # log location: set to pgdata dir also
-                    'start',  # action
-                ]
+                postgres_args = f'-h "{host}" -p {port}'
+                process_kwargs = {
+                    'close_fds': True,
+                    # Create a new process group to detach postgres from the Python process.
+                    # Ensure that the postgres process does not create a new console window.
+                    'creationflags': CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+                }
 
             try:
+                pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
-                pg_ctl(pg_ctl_args, pgdata=self.pgdata, user=self.system_user, timeout=10)
-            except subprocess.CalledProcessError as err:
+                pg_ctl(
+                    pg_ctl_args,
+                    pgdata=self.pgdata,
+                    user=self.system_user,
+                    timeout=10,
+                    **process_kwargs
+                )
+
+            except subprocess.SubprocessError:
                 _logger.error(
                     f'Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}'
                 )
-                raise err
-            except subprocess.TimeoutExpired as err:
-                _logger.error(
-                    f'Timeout starting server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}'
-                )
-                raise err
+                raise
 
             while True:
                 # in Windows, when there is a postmaster.pid,  init_ctl seems to return
