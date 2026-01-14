@@ -18,10 +18,10 @@ jobs:
           - os: macos-15-intel
             cibw-archs: x86_64
             deployment-target: '10.13'
-          - os: macos-latest
+          - os: macos-15
             cibw-archs: arm64
             deployment-target: '11.0'
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             cibw-archs: x86_64
             deployment-target: ''
           - os: ubuntu-24.04-arm
