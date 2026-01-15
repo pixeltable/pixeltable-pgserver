@@ -8,7 +8,9 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from types import TracebackType
 from typing import Any, ClassVar, Optional, Union
+from typing_extensions import Self
 
 import psutil
 
@@ -278,11 +280,11 @@ class PostgresServer:
         stdout = subprocess.check_output(f'{executable} {self.get_uri()}', input=command.encode(), shell=True)
         return stdout.decode('utf-8')
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self._count += 1
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         self._count -= 1
         if self._count <= 0:
             self._cleanup()

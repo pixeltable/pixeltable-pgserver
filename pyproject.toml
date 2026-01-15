@@ -31,6 +31,7 @@ dependencies = [
     "fasteners>=0.19",
     "platformdirs>=4.0.0",
     "psutil>=5.9.0",
+    "typing-extensions>=4.0.0",
 ]
 
 [project.urls]
@@ -40,6 +41,7 @@ documentation = "https://docs.pixeltable.com/"
 
 [project.optional-dependencies]
 dev = [
+    "mypy",
     "ruff",
     "sysv_ipc",
 ]
@@ -53,16 +55,6 @@ test = [
     "types-sqlalchemy-utils",
 ]
 
-[tool.isort]
-line_length = 120
-
-[tool.setuptools.packages.find]
-where = ["src"]  # list of folders that contain the packages (["."] by default)
-include = ["pixeltable_pgserver*"]  # package names should match these glob patterns (["*"] by default)
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
 [tool.cibuildwheel]
 before-all = "make"
 test-extras = "test"
@@ -70,6 +62,29 @@ test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 [tool.cibuildwheel.linux]
 before-all = "yum install -y readline-devel; make"
+
+[tool.isort]
+force_single_line = false
+line_length = 120
+multi_line_output = 3  # For ruff compatibility
+split_on_trailing_comma = false
+
+[tool.mypy]
+allow_redefinition = true
+disable_error_code = "no-any-unimported, no-any-return"
+disallow_any_unimported = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+follow_imports = "silent"
+plugins = "pydantic.mypy, pixeltable.mypy"
+show_error_codes = true
+strict_optional = false
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
@@ -108,3 +123,7 @@ known-first-party = ["pixeltable_pgserver"]
 
 [tool.ruff.format]
 quote-style = "single"  # can be "single", "double", or "preserve"
+
+[tool.setuptools.packages.find]
+where = ["src"]  # list of folders that contain the packages (["."] by default)
+include = ["pixeltable_pgserver*"]  # package names should match these glob patterns (["*"] by default)

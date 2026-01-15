@@ -168,7 +168,7 @@ if platform.system() != 'Windows':
 
         return entry
 
-    def ensure_prefix_permissions(path: Path):
+    def ensure_prefix_permissions(path: Path) -> None:
         """Ensure target user can traverse prefix to path
         Permissions for everyone will be increased to ensure traversal.
         """
@@ -186,14 +186,14 @@ if platform.system() != 'Windows':
                 break
             prefix = prefix.parent
 
-    def ensure_folder_permissions(path: Path, flag: int):
+    def ensure_folder_permissions(path: Path, flag: int) -> None:
         """Ensure target user can read,  and execute the folder.
         Permissions for everyone will be increased to ensure traversal.
         """
         # read and traverse folder
         g_rx_o_rx = stat.S_IRGRP | stat.S_IROTH | stat.S_IXGRP | stat.S_IXOTH
 
-        def _helper(path: Path):
+        def _helper(path: Path) -> None:
             if path.is_dir():
                 path.chmod(path.stat().st_mode | g_rx_o_rx)
                 for child in path.iterdir():
@@ -235,7 +235,7 @@ class DiskList:
         self.path.write_text(json.dumps(values))
 
 
-def socket_name_length_ok(socket_name: Path):
+def socket_name_length_ok(socket_name: Path) -> bool:
     """checks whether a socket path is too long for domain sockets
     on this system. Returns True if the socket path is ok, False if it is too long.
     """
@@ -255,7 +255,7 @@ def socket_name_length_ok(socket_name: Path):
         socket_name.unlink(missing_ok=True)
 
 
-def find_suitable_socket_dir(pgdata, runtime_path) -> Path:
+def find_suitable_socket_dir(pgdata: Path, runtime_path: Path) -> Path:
     """Assumes server is not running. Returns a suitable directory for used as pg_ctl -o '-k ' option.
     Usually, this is the same directory as the pgdata directory.
     However, if the pgdata directory exceeds the maximum length for domain sockets on this system,
