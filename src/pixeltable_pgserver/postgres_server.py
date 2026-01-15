@@ -120,8 +120,10 @@ class PostgresServer:
             for proc in psutil.process_iter(attrs=['name', 'cmdline']):
                 if proc.info['name'] == 'postgres':
                     if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
-                        _logger.info(f"Found a running postgres server with same pgdata: {proc.as_dict(attrs=['name', 'pid', 'cmdline'])=}.\
-                                            Assuming it is a leftover from a previous run on a different version of the same pgdata path, killing it.")
+                        _logger.info(
+                            f"Found a running postgres server with same pgdata: {proc.as_dict(attrs=['name', 'pid', 'cmdline'])=}."
+                            'Assuming it is a leftover from a previous run on a different version of the same pgdata path, killing it.'
+                        )
                         proc.terminate()
                         try:
                             proc.wait(2)  # wait at most a second
@@ -186,13 +188,7 @@ class PostgresServer:
             try:
                 pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
-                pg_ctl(
-                    pg_ctl_args,
-                    pgdata=self.pgdata,
-                    user=self.system_user,
-                    timeout=10,
-                    **process_kwargs
-                )
+                pg_ctl(pg_ctl_args, pgdata=self.pgdata, user=self.system_user, timeout=10, **process_kwargs)
 
             except subprocess.SubprocessError:
                 _logger.error(
