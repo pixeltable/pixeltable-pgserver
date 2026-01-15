@@ -16,8 +16,8 @@ import platformdirs
 import psutil
 from typing_extensions import Self
 
-from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl  # type: ignore[attr-defined]
-from .utils import DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
+from .pgexec import pgexec
+from .utils import POSTGRES_BIN_PATH, DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
 
 if platform.system() != 'Windows':
     from .utils import ensure_folder_permissions, ensure_prefix_permissions, ensure_user_exists
@@ -142,7 +142,8 @@ class PostgresServer:
                         proc.kill()
                     assert not proc.is_running()
 
-            initdb(
+            pgexec(
+                'initdb',
                 (
                     '--auth=trust',
                     '--auth-local=trust',
@@ -173,7 +174,7 @@ class PostgresServer:
                 _logger.info(f'no postmaster.pid file found in {self.pgdata}')
 
             postgres_args: str
-            process_kwargs: dict[str, Any]
+            subprocess_kwargs: dict[str, Any]
 
             if platform.system() != 'Windows':
                 # use sockets to avoid any future conflict with port numbers
@@ -186,7 +187,7 @@ class PostgresServer:
                 # no listening on any IP addresses (forwarded to postgres exec) see man postgres for -hj
                 # socket option (forwarded to postgres exec) see man postgres for -k
                 postgres_args = f'-h "" -k {socket_dir}'
-                process_kwargs = {}
+                subprocess_kwargs = {}
 
             else:  # Windows
                 socket_dir = None
@@ -194,7 +195,7 @@ class PostgresServer:
                 host = '127.0.0.1'
                 port = find_suitable_port(host)
                 postgres_args = f'-h "{host}" -p {port}'
-                process_kwargs = {
+                subprocess_kwargs = {
                     'close_fds': True,
                     # Create a new process group to detach postgres from the Python process.
                     # Ensure that the postgres process does not create a new console window.
@@ -204,7 +205,7 @@ class PostgresServer:
             try:
                 pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), '-D', str(self.pgdata), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
-                pg_ctl(pg_ctl_args, user=self.system_user, timeout=10, **process_kwargs)
+                pgexec('pg_ctl', pg_ctl_args, user=self.system_user, timeout=10, **subprocess_kwargs)
 
             except subprocess.SubprocessError:
                 _logger.error(
@@ -250,7 +251,7 @@ class PostgresServer:
                 assert self._postmaster_info.process is not None
                 if self._postmaster_info.process.is_running():
                     try:
-                        pg_ctl(('-w', '-D', str(self.pgdata), 'stop'), user=self.system_user)
+                        pgexec('pg_ctl', ('-w', '-D', str(self.pgdata), 'stop'), user=self.system_user)
                         stopped = True
                     except subprocess.CalledProcessError:
                         stopped = False

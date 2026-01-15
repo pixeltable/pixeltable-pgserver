@@ -1,12 +1,12 @@
 import logging
 import multiprocessing as mp
-from multiprocessing import queues
 import os
 import platform
 import shutil
 import socket
 import subprocess
 import tempfile
+from multiprocessing import queues
 from pathlib import Path
 from typing import Iterator
 
@@ -15,7 +15,8 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy_utils import create_database, database_exists
 
-from pixeltable_pgserver import PostgresServer, get_server, pg_ctl
+from pixeltable_pgserver import PostgresServer, get_server
+from pixeltable_pgserver.pgexec import pgexec
 from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, process_is_running
 
 
@@ -211,7 +212,7 @@ def test_pg_ctl() -> None:
         pid = None
         try:
             with get_server(tmpdir) as pg:
-                output = pg_ctl(('-D', str(pg.pgdata), 'status'))
+                output = pgexec('pg_ctl', ('-D', str(pg.pgdata), 'status'))
                 assert 'server is running' in output.splitlines()[0]
 
         finally:

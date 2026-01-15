@@ -14,6 +14,9 @@ import psutil
 if TYPE_CHECKING:
     import pwd
 
+
+POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
+
 _logger = logging.getLogger('pixeltable_pgserver')
 
 
