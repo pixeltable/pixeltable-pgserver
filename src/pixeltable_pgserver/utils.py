@@ -44,11 +44,11 @@ class PostmasterInfo:
     process: Optional[psutil.Process]
 
     def __init__(self, lines: list[str]) -> None:
-        _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status']
-        assert len(lines) == len(_lines), f'_lines: {_lines=} lines: {lines=}'
-        clean_lines = [line.strip() for line in lines]
+        line_vars = ('pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status')
+        assert len(lines) == len(line_vars), f'line_vars: {line_vars=}\nlines: {lines=}'
+        clean_lines = (line.strip() for line in lines)
 
-        raw: dict[str, str] = dict(zip(_lines, clean_lines))
+        raw: dict[str, str] = dict(zip(line_vars, clean_lines))
 
         self.pid = int(raw['pid'])
         self.pgdata = Path(raw['pgdata'])

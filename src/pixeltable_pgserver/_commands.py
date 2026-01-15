@@ -3,7 +3,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable, Optional, Sequence
+from typing import Callable, Sequence
 
 POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
 
@@ -27,7 +27,10 @@ def create_command_function(pg_exe_name: str) -> Callable:
 
         full_command_line = (str(POSTGRES_BIN_PATH / pg_exe_name), *args)
 
-        with tempfile.TemporaryFile('w+') as stdout, tempfile.TemporaryFile('w+') as stderr:
+        with (
+            tempfile.TemporaryFile('w+', encoding='utf-8') as stdout,
+            tempfile.TemporaryFile('w+', encoding='utf-8') as stderr,
+        ):
             try:
                 _logger.info('Running commandline:\n%s\nwith kwargs: `%s`', full_command_line, kwargs)
                 # NB: capture_output=True, as well as using stdout=subprocess.PIPE and stderr=subprocess.PIPE
@@ -75,7 +78,7 @@ def _init():
         exe_name = path.name
         prog = create_command_function(exe_name)
         # Strip .exe suffix for Windows compatibility
-        function_name = exe_name.strip('.exe')
+        function_name = exe_name.removesuffix('.exe')
         setattr(sys.modules[__name__], function_name, prog)
         __all__.append(function_name)
 

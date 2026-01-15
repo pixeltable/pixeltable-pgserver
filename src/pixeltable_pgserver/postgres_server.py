@@ -1,4 +1,5 @@
 import atexit
+from contextlib import suppress
 import logging
 import os
 import platform
@@ -7,9 +8,12 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, Union
 
 import psutil
+
+import fasteners  # type: ignore[import-untyped]
+import platformdirs
 
 from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl  # type: ignore[attr-defined]
 from .utils import DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
@@ -27,10 +31,7 @@ CREATE_NO_WINDOW = 0x08000000
 class PostgresServer:
     """Provides a common interface for interacting with a server."""
 
-    import fasteners  # type: ignore[import-untyped]
-    import platformdirs
-
-    _instances: dict[Path, 'PostgresServer'] = {}
+    _instances: ClassVar[dict[Path, 'PostgresServer']] = {}
 
     runtime_path: Path = platformdirs.user_runtime_path('python_PostgresServer')
     if not runtime_path.exists():
@@ -44,7 +45,7 @@ class PostgresServer:
         """Initializes the postgresql server instance.
         Constructor is intended to be called directly, use get_server() instead.
         """
-        assert cleanup_mode in [None, 'stop', 'delete']
+        assert cleanup_mode in (None, 'stop', 'delete')
 
         self.pgdata = pgdata
         self.log = self.pgdata / 'log'
@@ -115,26 +116,41 @@ class PostgresServer:
             # This must be done before initdb to ensure no race conditions with the old server.
             #
             # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
-            # way to test this: python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
+            # way to test this:
+            #
+            # python -c 'import pixeltable as pxt; pxt.Client()'
+            # rm -rf ~/.pixeltable/
+            # python -c 'import pixeltable as pxt; pxt.Client()'
             _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
             for proc in psutil.process_iter(attrs=('name', 'cmdline')):
-                if proc.info['name'] == 'postgres':
-                    if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
-                        _logger.info(
-                            f"Found a running postgres server with same pgdata: {proc.as_dict(attrs=['name', 'pid', 'cmdline'])=}."
-                            'Assuming it is a leftover from a previous run on a different version of the same pgdata path, killing it.'
-                        )
-                        proc.terminate()
-                        try:
-                            proc.wait(2)
-                        except psutil.TimeoutExpired:
-                            pass
-                        if proc.is_running():
-                            proc.kill()
-                        assert not proc.is_running()
+                if (
+                    proc.info['name'] == 'postgres'
+                    and proc.info['cmdline'] is not None
+                    and str(self.pgdata) in proc.info['cmdline']
+                ):
+                    _logger.info(
+                        f'Found a running postgres server with same `pgdata` dir: '
+                        f"{proc.as_dict(attrs=('name', 'pid', 'cmdline'))=}."
+                        'Assuming it is a leftover from a previous run on a different '
+                        'version of the same `pgdata` path; killing it.'
+                    )
+                    proc.terminate()
+                    with suppress(psutil.TimeoutExpired):
+                        proc.wait(2)
+                    if proc.is_running():
+                        proc.kill()
+                    assert not proc.is_running()
 
             initdb(
-                ('--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user, '-D', str(self.pgdata)),
+                (
+                    '--auth=trust',
+                    '--auth-local=trust',
+                    '--encoding=utf8',
+                    '-U',
+                    self.postgres_user,
+                    '-D',
+                    str(self.pgdata),
+                ),
                 user=self.system_user,
             )
         else:
@@ -191,7 +207,8 @@ class PostgresServer:
 
             except subprocess.SubprocessError:
                 _logger.error(
-                    f'Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) below:\n{self.log.read_text()}'
+                    f'Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) '
+                    f'below:\n{self.log.read_text()}'
                 )
                 raise
 
@@ -199,14 +216,14 @@ class PostgresServer:
                 # in Windows, when there is a postmaster.pid,  init_ctl seems to return
                 # but the file is not immediately updated, here we wait until the file shows
                 # a new running server. see test_stale_postmaster
-                _logger.info(f'waiting for postmaster info to show a running process')
+                _logger.info('Waiting for postmaster info to show a running process.')
                 pinfo = PostmasterInfo.read_from_pgdata(self.pgdata)
-                _logger.info(f'running... checking if ready {pinfo=}')
+                _logger.info(f'Running; checking if ready {pinfo=}')
                 if pinfo is not None and pinfo.is_running() and pinfo.status == 'ready':
                     self._postmaster_info = pinfo
                     break
 
-                _logger.info(f'not ready yet... waiting a bit more...')
+                _logger.info('Not ready yet; waiting a bit longer.')
                 time.sleep(1.0)
 
         _logger.info(f'Now asserting server is running {self._postmaster_info=}')
@@ -217,17 +234,17 @@ class PostgresServer:
     def _cleanup(self) -> None:
         with self._lock:
             pids = self.global_process_id_list.get_and_remove(os.getpid())
-            _logger.info(f'exiting {os.getpid()} remaining {pids=}')
+            _logger.info(f'Exiting {os.getpid()} remaining {pids=}')
             if pids != [os.getpid()]:  # includes case where already cleaned up
                 return
 
-            _logger.info(f'cleaning last handle for server: {self.pgdata}')
+            _logger.info(f'Cleaning last handle for server: {self.pgdata}')
             # last handle is being removed
             del self._instances[self.pgdata]
             if self.cleanup_mode is None:  # done
                 return
 
-            assert self.cleanup_mode in ['stop', 'delete']
+            assert self.cleanup_mode in ('stop', 'delete')
             if self._postmaster_info is not None:
                 assert self._postmaster_info.process is not None
                 if self._postmaster_info.process.is_running():
@@ -239,7 +256,7 @@ class PostgresServer:
                         pass  # somehow the server is already stopped.
 
                     if not stopped:
-                        _logger.warning(f'Failed to stop server, killing it instead.')
+                        _logger.warning('Failed to stop server; killing it instead.')
                         self._postmaster_info.process.terminate()
                         try:
                             self._postmaster_info.process.wait(2)
