@@ -117,7 +117,7 @@ class PostgresServer:
             # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
             # way to test this: python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
             _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
-            for proc in psutil.process_iter(attrs=['name', 'cmdline']):
+            for proc in psutil.process_iter(attrs=('name', 'cmdline')):
                 if proc.info['name'] == 'postgres':
                     if proc.info['cmdline'] is not None and str(self.pgdata) in proc.info['cmdline']:
                         _logger.info(
@@ -126,7 +126,7 @@ class PostgresServer:
                         )
                         proc.terminate()
                         try:
-                            proc.wait(2)  # wait at most a second
+                            proc.wait(2)
                         except psutil.TimeoutExpired:
                             pass
                         if proc.is_running():
@@ -134,8 +134,7 @@ class PostgresServer:
                         assert not proc.is_running()
 
             initdb(
-                ['--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user],
-                pgdata=self.pgdata,
+                ('--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user, '-D', str(self.pgdata)),
                 user=self.system_user,
             )
         else:
@@ -186,9 +185,9 @@ class PostgresServer:
                 }
 
             try:
-                pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), 'start')
+                pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), '-D', str(self.pgdata), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
-                pg_ctl(pg_ctl_args, pgdata=self.pgdata, user=self.system_user, timeout=10, **process_kwargs)
+                pg_ctl(pg_ctl_args, user=self.system_user, timeout=10, **process_kwargs)
 
             except subprocess.SubprocessError:
                 _logger.error(
@@ -233,7 +232,7 @@ class PostgresServer:
                 assert self._postmaster_info.process is not None
                 if self._postmaster_info.process.is_running():
                     try:
-                        pg_ctl(['-w', 'stop'], pgdata=self.pgdata, user=self.system_user)
+                        pg_ctl(('-w', '-D', str(self.pgdata), 'stop'), user=self.system_user)
                         stopped = True
                     except subprocess.CalledProcessError:
                         stopped = False

@@ -11,7 +11,7 @@ _logger = logging.getLogger('pixeltable_pgserver')
 
 
 def create_command_function(pg_exe_name: str) -> Callable:
-    def command(args: Sequence[str], pgdata: Optional[Path] = None, **kwargs) -> str:
+    def command(args: Sequence[str], **kwargs) -> str:
         """
         Run a command with the given command line arguments.
         Args:
@@ -24,11 +24,6 @@ def create_command_function(pg_exe_name: str) -> Callable:
         Returns:
             The stdout of the command as a string.
         """
-        if pg_exe_name.strip('.exe') in ['initdb', 'pg_ctl', 'pg_dump']:
-            assert pgdata is not None, 'pgdata must be provided for initdb, pg_ctl, and pg_dump'
-
-        if pgdata is not None:
-            args = ('-D', str(pgdata), *args)
 
         full_command_line = (str(POSTGRES_BIN_PATH / pg_exe_name), *args)
 
