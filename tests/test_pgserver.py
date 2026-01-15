@@ -118,8 +118,8 @@ def test_get_port() -> None:
         sock.bind((address, port))
     except OSError as err:
         if 'Address already in use' in str(err):
-            raise RuntimeError(f'Port {port} is already in use.')
-        raise err
+            raise RuntimeError(f'Port {port} is already in use.') from err
+        raise
     finally:
         sock.close()
 
@@ -239,7 +239,7 @@ def test_stale_postmaster() -> None:
                 pgdata = pg.pgdata
                 postmaster_pid = pgdata / 'postmaster.pid'
 
-                ## make a backup of the postmaster.pid file
+                # make a backup of the postmaster.pid file
                 shutil.copy2(str(postmaster_pid), str(postmaster_pid) + '.bak')
 
             # restore the backup to gurantee a stale postmaster.pid file
@@ -295,13 +295,12 @@ def test_start_failure_log(caplog: pytest.LogCaptureFixture) -> None:
         with get_server(tmpdir) as _:
             pass
 
-        ## now delete some files to make it fail
+        # now delete some files to make it fail
         for f in Path(tmpdir).glob('**/postgresql.conf'):
             f.unlink()
 
         with pytest.raises(subprocess.CalledProcessError):
-            with get_server(tmpdir) as _:
-                pass
+            _ = get_server(tmpdir)
 
         assert 'postgres: could not access the server configuration file' in caplog.text
 
@@ -311,10 +310,14 @@ def test_no_conflict() -> None:
     pid1 = None
     pid2 = None
     try:
-        with tempfile.TemporaryDirectory() as tmpdir1, tempfile.TemporaryDirectory() as tmpdir2:
-            with get_server(tmpdir1) as pg1, get_server(tmpdir2) as pg2:
-                pid1 = _check_server(pg1)
-                pid2 = _check_server(pg2)
+        with (
+            tempfile.TemporaryDirectory() as tmpdir1,
+            tempfile.TemporaryDirectory() as tmpdir2,
+            get_server(tmpdir1) as pg1,
+            get_server(tmpdir2) as pg2,
+        ):
+            pid1 = _check_server(pg1)
+            pid2 = _check_server(pg2)
     finally:
         _kill_server(pid1)
         _kill_server(pid2)
@@ -324,7 +327,11 @@ def _reuse_deleted_datadir(prefix: str) -> None:
     """test common scenario where we repeatedly delete the datadir and start a new server on it"""
     """ NB: currently this test is not reproducing the problem """
     # one can reproduce the problem by running the following in a loop:
-    # python -c 'import pixeltable as pxt; pxt.Client()'; rm -rf ~/.pixeltable/; python -c 'import pixeltable as pxt; pxt.Client()'
+    #
+    # python -c 'import pixeltable as pxt; pxt.Client()'
+    # rm -rf ~/.pixeltable/
+    # python -c 'import pixeltable as pxt; pxt.Client()'
+    #
     # which creates a database with more contents etc
     tmpdir = tempfile.mkdtemp(prefix=prefix)
     pgdata = Path(tmpdir) / 'pgdata'
