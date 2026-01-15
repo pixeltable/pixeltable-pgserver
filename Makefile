@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := build
-.PHONY: check-conda build wheel install-wheel install-dev clean test
+.PHONY: check-conda build wheel install-wheel install-dev test clean
 
 check-conda:
 ifdef CONDA_DEFAULT_ENV
@@ -22,9 +22,21 @@ install-wheel: wheel
 install-dev: check-conda build
 	python -m pip install -e .[dev,test]
 
+test: pytest check
+
+pytest:
+	python -m pytest -v tests/
+
+check:
+	mypy src tests
+	ruff check src tests
+	ruff format --check src tests
+	ruff check --select I src tests
+
+format:
+	ruff format src tests
+	ruff check --select I --fix src tests
+
 clean:
 	rm -rf build/ wheelhouse/ dist/ .eggs/
 	$(MAKE) -C pgbuild clean
-
-test:
-	python -m pytest -v tests/

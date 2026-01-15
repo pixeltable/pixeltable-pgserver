@@ -1,5 +1,6 @@
 import logging
 import multiprocessing as mp
+from multiprocessing import queues
 import os
 import platform
 import shutil
@@ -163,7 +164,7 @@ def test_reentrant() -> None:
 
 
 def _start_server_in_separate_process(
-    pgdata: Path, queue_in: mp.Queue[int] | None, queue_out: mp.Queue[int], cleanup_mode: str | None
+    pgdata: Path, queue_in: queues.Queue | None, queue_out: queues.Queue, cleanup_mode: str | None
 ) -> None:
     with get_server(pgdata, cleanup_mode=cleanup_mode) as pg:
         pid = _check_server(pg)
@@ -335,7 +336,7 @@ def _reuse_deleted_datadir(prefix: str) -> None:
         for _ in range(num_tries):
             assert not pgdata.exists()
 
-            queue_from_child: mp.Queue = mp.Queue()
+            queue_from_child: queues.Queue = mp.Queue()
             child = mp.Process(target=_start_server_in_separate_process, args=(pgdata, None, queue_from_child, None))
             child.start()
             # wait for child to start server
@@ -403,8 +404,8 @@ def test_multiprocess_shared() -> None:
     pid = None
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_to_child: mp.Queue[int] = mp.Queue()
-            queue_from_child: mp.Queue[int] = mp.Queue()
+            queue_to_child: queues.Queue = mp.Queue()
+            queue_from_child: queues.Queue = mp.Queue()
             child = mp.Process(
                 target=_start_server_in_separate_process, args=(tmpdir, queue_to_child, queue_from_child, 'stop')
             )

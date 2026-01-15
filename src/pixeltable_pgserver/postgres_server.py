@@ -283,7 +283,9 @@ class PostgresServer:
         self._count += 1
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
         self._count -= 1
         if self._count <= 0:
             self._cleanup()
