@@ -7,7 +7,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import Iterator
 
 import psutil
 import pytest
@@ -18,7 +18,7 @@ from pixeltable_pgserver import PostgresServer, get_server, pg_ctl
 from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, process_is_running
 
 
-def _check_sqlalchemy_works(srv: PostgresServer, driver: Optional[str] = None) -> None:
+def _check_sqlalchemy_works(srv: PostgresServer, driver: str | None = None) -> None:
     database_name = 'testdb'
     uri = srv.get_uri(database_name, driver)
 
@@ -86,7 +86,7 @@ def _check_server(pg: PostgresServer) -> int:
     return postmaster_info.pid
 
 
-def _kill_server(pid: Union[int, psutil.Process, None]) -> None:
+def _kill_server(pid: int | psutil.Process | None) -> None:
     if pid is None:
         return
     elif isinstance(pid, psutil.Process):
@@ -163,7 +163,7 @@ def test_reentrant() -> None:
 
 
 def _start_server_in_separate_process(
-    pgdata: Path, queue_in: Optional[mp.Queue[int]], queue_out: mp.Queue[int], cleanup_mode: Optional[str]
+    pgdata: Path, queue_in: mp.Queue[int] | None, queue_out: mp.Queue[int], cleanup_mode: str | None
 ) -> None:
     with get_server(pgdata, cleanup_mode=cleanup_mode) as pg:
         pid = _check_server(pg)

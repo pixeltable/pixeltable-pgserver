@@ -7,7 +7,7 @@ import stat
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import psutil
 
@@ -36,12 +36,12 @@ class PostmasterInfo:
     pid: int
     pgdata: Path
     start_time: datetime
-    socket_dir: Optional[Path]
-    hostname: Optional[str]
-    port: Optional[int]
+    socket_dir: Path | None
+    hostname: str | None
+    port: int | None
     shmem_info: str
     status: str
-    process: Optional[psutil.Process]
+    process: psutil.Process | None
 
     def __init__(self, lines: list[str]) -> None:
         line_vars = ('pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status')
@@ -90,7 +90,7 @@ class PostmasterInfo:
         return self.process is not None and self.process.is_running()
 
     @classmethod
-    def read_from_pgdata(cls, pgdata: Path) -> Optional['PostmasterInfo']:
+    def read_from_pgdata(cls, pgdata: Path) -> 'PostmasterInfo | None':
         postmaster_file = pgdata / 'postmaster.pid'
         if not postmaster_file.exists():
             return None
@@ -98,7 +98,7 @@ class PostmasterInfo:
         lines = postmaster_file.read_text().splitlines()
         return cls(lines)
 
-    def get_uri(self, user: str = 'postgres', database: Optional[str] = None, driver: Optional[str] = None) -> str:
+    def get_uri(self, user: str = 'postgres', database: str | None = None, driver: str | None = None) -> str:
         """Returns a connection uri string for the postgresql server using the information in postmaster.pid"""
         if database is None:
             database = user
@@ -116,7 +116,7 @@ class PostmasterInfo:
             raise RuntimeError('postmaster.pid does not contain port or socket information')
 
     @property
-    def shmget_id(self) -> Optional[int]:
+    def shmget_id(self) -> int | None:
         if platform.system() == 'Windows':
             return None
 
@@ -126,7 +126,7 @@ class PostmasterInfo:
         return int(raw_id)
 
     @property
-    def socket_path(self) -> Optional[Path]:
+    def socket_path(self) -> Path | None:
         if self.socket_dir is not None:
             # TODO: is the port always 5432 for the socket? or does it depend on the port in postmaster.pid?
             return self.socket_dir / f'.s.PGSQL.{self.port}'
@@ -150,7 +150,7 @@ def process_is_running(pid: int) -> bool:
 
 if platform.system() != 'Windows':
 
-    def ensure_user_exists(username: str) -> Optional['pwd.struct_passwd']:
+    def ensure_user_exists(username: str) -> 'pwd.struct_passwd | None':
         """Ensure system user `username` exists.
         Returns their pwentry if user exists, otherwise it creates a user through `useradd`.
         Assume permissions to add users, eg run as root.
@@ -292,7 +292,7 @@ def find_suitable_socket_dir(pgdata: Path, runtime_path: Path) -> Path:
     return ok_path
 
 
-def find_suitable_port(address: Optional[str] = None) -> int:
+def find_suitable_port(address: str | None = None) -> int:
     """Find an available TCP port."""
     if address is None:
         address = '127.0.0.1'

@@ -1,5 +1,4 @@
 import atexit
-from contextlib import suppress
 import logging
 import os
 import platform
@@ -7,15 +6,15 @@ import shutil
 import subprocess
 import tempfile
 import time
+from contextlib import suppress
 from pathlib import Path
 from types import TracebackType
-from typing import Any, ClassVar, Optional, Union
-from typing_extensions import Self
-
-import psutil
+from typing import Any, ClassVar
 
 import fasteners  # type: ignore[import-untyped]
 import platformdirs
+import psutil
+from typing_extensions import Self
 
 from ._commands import POSTGRES_BIN_PATH, initdb, pg_ctl  # type: ignore[attr-defined]
 from .utils import DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
@@ -43,7 +42,7 @@ class PostgresServer:
     lock_path = runtime_path / '.lockfile'
     _lock = fasteners.InterProcessLock(lock_path)
 
-    def __init__(self, pgdata: Path, *, cleanup_mode: Optional[str] = 'stop'):
+    def __init__(self, pgdata: Path, *, cleanup_mode: str | None = 'stop'):
         """Initializes the postgresql server instance.
         Constructor is intended to be called directly, use get_server() instead.
         """
@@ -66,7 +65,7 @@ class PostgresServer:
         list_path = self.pgdata / '.handle_pids.json'
         self.global_process_id_list = DiskList(list_path)
         self.cleanup_mode = cleanup_mode
-        self._postmaster_info: Optional[PostmasterInfo] = None
+        self._postmaster_info: PostmasterInfo | None = None
         self._count = 0
 
         atexit.register(self._cleanup)
@@ -80,14 +79,14 @@ class PostgresServer:
         assert self._postmaster_info is not None
         return self._postmaster_info
 
-    def get_pid(self) -> Optional[int]:
+    def get_pid(self) -> int | None:
         """Returns the pid of the postgresql server process.
         (First line of postmaster.pid file).
         If the server is not running, returns None.
         """
         return self.get_postmaster_info().pid
 
-    def get_uri(self, database: Optional[str] = None, driver: Optional[str] = None) -> str:
+    def get_uri(self, database: str | None = None, driver: str | None = None) -> str:
         """Returns a connection string for the postgresql server."""
         return self.get_postmaster_info().get_uri(database=database, driver=driver)
 
@@ -294,7 +293,7 @@ class PostgresServer:
         self._cleanup()
 
 
-def get_server(pgdata: Union[Path, str], cleanup_mode: Optional[str] = 'stop') -> PostgresServer:
+def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop') -> PostgresServer:
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
