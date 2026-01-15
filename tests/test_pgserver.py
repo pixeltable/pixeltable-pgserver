@@ -211,7 +211,7 @@ def test_pg_ctl():
         pid = None
         try:
             with pixeltable_pgserver.get_server(tmpdir) as pg:
-                output = pixeltable_pgserver.pg_ctl(['status'], str(pg.pgdata))
+                output = pixeltable_pgserver.pg_ctl(('-D', str(pg.pgdata), 'status'))
                 assert 'server is running' in output.splitlines()[0]
 
         finally:

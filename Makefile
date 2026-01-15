@@ -17,10 +17,10 @@ wheel: build
 	python setup.py bdist_wheel
 
 install-wheel: wheel
-	python -m pip install --force-reinstall dist/*.whl
+	python -m pip install dist/*.whl
 
 install-dev: check-conda build
-	python -m pip install --force-reinstall -e .[dev,test]
+	python -m pip install -e .[dev,test]
 
 clean:
 	rm -rf build/ wheelhouse/ dist/ .eggs/
