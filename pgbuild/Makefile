@@ -7,7 +7,7 @@ BUILD := $(shell pwd)/pgbuild/
 all: pgvector postgres
 
 ### postgres
-POSTGRES_VERSION := 16.10
+POSTGRES_VERSION := 16.11
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
 POSTGRES_SRC := postgresql-$(POSTGRES_VERSION)
 POSTGRES_BLD := $(POSTGRES_SRC)
@@ -71,9 +71,6 @@ pgvector: postgres $(INSTALL_PREFIX)/lib/vector.so
 .PHONY: clean clean-all
 clean:
 	rm -rf $(INSTALL_PREFIX)
-	rm -rf $(POSTGRES_SRC)
-	rm -rf $(POSTGRES_BLD)
-	rm -rf $(PGVECTOR_DIR)
-
-clean-all: clean
+	rm -rf postgresql-*
+	rm -rf pgvector-*
 	rm -rf *.tar.gz

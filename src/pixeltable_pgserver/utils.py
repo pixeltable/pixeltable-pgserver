@@ -7,12 +7,15 @@ import stat
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import psutil
 
 if TYPE_CHECKING:
     import pwd
+
+
+POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
@@ -36,19 +39,19 @@ class PostmasterInfo:
     pid: int
     pgdata: Path
     start_time: datetime
-    socket_dir: Optional[Path]
-    hostname: Optional[str]
-    port: Optional[int]
+    socket_dir: Path | None
+    hostname: str | None
+    port: int | None
     shmem_info: str
     status: str
-    process: Optional[psutil.Process]
+    process: psutil.Process | None
 
     def __init__(self, lines: list[str]) -> None:
-        _lines = ['pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status']
-        assert len(lines) == len(_lines), f'_lines: {_lines=} lines: {lines=}'
-        clean_lines = [line.strip() for line in lines]
+        line_vars = ('pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status')
+        assert len(lines) == len(line_vars), f'line_vars: {line_vars=}\nlines: {lines=}'
+        clean_lines = (line.strip() for line in lines)
 
-        raw: dict[str, str] = dict(zip(_lines, clean_lines))
+        raw: dict[str, str] = dict(zip(line_vars, clean_lines))
 
         self.pid = int(raw['pid'])
         self.pgdata = Path(raw['pgdata'])
@@ -90,7 +93,7 @@ class PostmasterInfo:
         return self.process is not None and self.process.is_running()
 
     @classmethod
-    def read_from_pgdata(cls, pgdata: Path) -> Optional['PostmasterInfo']:
+    def read_from_pgdata(cls, pgdata: Path) -> 'PostmasterInfo | None':
         postmaster_file = pgdata / 'postmaster.pid'
         if not postmaster_file.exists():
             return None
@@ -98,7 +101,7 @@ class PostmasterInfo:
         lines = postmaster_file.read_text().splitlines()
         return cls(lines)
 
-    def get_uri(self, user: str = 'postgres', database: Optional[str] = None, driver: Optional[str] = None) -> str:
+    def get_uri(self, user: str = 'postgres', database: str | None = None, driver: str | None = None) -> str:
         """Returns a connection uri string for the postgresql server using the information in postmaster.pid"""
         if database is None:
             database = user
@@ -116,7 +119,7 @@ class PostmasterInfo:
             raise RuntimeError('postmaster.pid does not contain port or socket information')
 
     @property
-    def shmget_id(self) -> Optional[int]:
+    def shmget_id(self) -> int | None:
         if platform.system() == 'Windows':
             return None
 
@@ -126,7 +129,7 @@ class PostmasterInfo:
         return int(raw_id)
 
     @property
-    def socket_path(self) -> Optional[Path]:
+    def socket_path(self) -> Path | None:
         if self.socket_dir is not None:
             # TODO: is the port always 5432 for the socket? or does it depend on the port in postmaster.pid?
             return self.socket_dir / f'.s.PGSQL.{self.port}'
@@ -150,7 +153,7 @@ def process_is_running(pid: int) -> bool:
 
 if platform.system() != 'Windows':
 
-    def ensure_user_exists(username: str) -> Optional['pwd.struct_passwd']:
+    def ensure_user_exists(username: str) -> 'pwd.struct_passwd | None':
         """Ensure system user `username` exists.
         Returns their pwentry if user exists, otherwise it creates a user through `useradd`.
         Assume permissions to add users, eg run as root.
@@ -168,7 +171,7 @@ if platform.system() != 'Windows':
 
         return entry
 
-    def ensure_prefix_permissions(path: Path):
+    def ensure_prefix_permissions(path: Path) -> None:
         """Ensure target user can traverse prefix to path
         Permissions for everyone will be increased to ensure traversal.
         """
@@ -186,14 +189,14 @@ if platform.system() != 'Windows':
                 break
             prefix = prefix.parent
 
-    def ensure_folder_permissions(path: Path, flag: int):
+    def ensure_folder_permissions(path: Path, flag: int) -> None:
         """Ensure target user can read,  and execute the folder.
         Permissions for everyone will be increased to ensure traversal.
         """
         # read and traverse folder
         g_rx_o_rx = stat.S_IRGRP | stat.S_IROTH | stat.S_IXGRP | stat.S_IXOTH
 
-        def _helper(path: Path):
+        def _helper(path: Path) -> None:
             if path.is_dir():
                 path.chmod(path.stat().st_mode | g_rx_o_rx)
                 for child in path.iterdir():
@@ -235,7 +238,7 @@ class DiskList:
         self.path.write_text(json.dumps(values))
 
 
-def socket_name_length_ok(socket_name: Path):
+def socket_name_length_ok(socket_name: Path) -> bool:
     """checks whether a socket path is too long for domain sockets
     on this system. Returns True if the socket path is ok, False if it is too long.
     """
@@ -255,7 +258,7 @@ def socket_name_length_ok(socket_name: Path):
         socket_name.unlink(missing_ok=True)
 
 
-def find_suitable_socket_dir(pgdata, runtime_path) -> Path:
+def find_suitable_socket_dir(pgdata: Path, runtime_path: Path) -> Path:
     """Assumes server is not running. Returns a suitable directory for used as pg_ctl -o '-k ' option.
     Usually, this is the same directory as the pgdata directory.
     However, if the pgdata directory exceeds the maximum length for domain sockets on this system,
@@ -292,7 +295,7 @@ def find_suitable_socket_dir(pgdata, runtime_path) -> Path:
     return ok_path
 
 
-def find_suitable_port(address: Optional[str] = None) -> int:
+def find_suitable_port(address: str | None = None) -> int:
     """Find an available TCP port."""
     if address is None:
         address = '127.0.0.1'

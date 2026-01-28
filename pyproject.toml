@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixeltable-pgserver"
-version = "0.5.0"
+version = "0.5.1"
 description = "Embedded Postgres Server for Pixeltable"
 authors = [{ name = "Pixeltable, Inc.", email = "contact@pixeltable.com" }]
 requires-python = ">=3.10"
@@ -31,6 +31,7 @@ dependencies = [
     "fasteners>=0.19",
     "platformdirs>=4.0.0",
     "psutil>=5.9.0",
+    "typing-extensions>=4.0.0",
 ]
 
 [project.urls]
@@ -40,6 +41,7 @@ documentation = "https://docs.pixeltable.com/"
 
 [project.optional-dependencies]
 dev = [
+    "mypy",
     "ruff",
     "sysv_ipc",
 ]
@@ -53,16 +55,6 @@ test = [
     "types-sqlalchemy-utils",
 ]
 
-[tool.isort]
-line_length = 120
-
-[tool.setuptools.packages.find]
-where = ["src"]  # list of folders that contain the packages (["."] by default)
-include = ["pixeltable_pgserver*"]  # package names should match these glob patterns (["*"] by default)
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
 [tool.cibuildwheel]
 before-all = "make"
 test-extras = "test"
@@ -71,12 +63,59 @@ test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 [tool.cibuildwheel.linux]
 before-all = "yum install -y readline-devel; make"
 
+[tool.isort]
+force_single_line = false
+line_length = 120
+multi_line_output = 3  # For ruff compatibility
+split_on_trailing_comma = false
+
+[tool.mypy]
+allow_redefinition = true
+disable_error_code = "no-any-unimported, no-any-return"
+disallow_any_unimported = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+follow_imports = "silent"
+plugins = "pydantic.mypy, pixeltable.mypy"
+show_error_codes = true
+strict_optional = false
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 120
 
 [tool.ruff.lint]
-select = ["F", "E", "W", "C", "I", "N", "B", "A", "ICN", "PYI", "SIM", "TD002", "PL", "RUF"]
-ignore = ["PLC0415", "PLR0904", "PLR0912", "PLR0913", "PLR0914", "PLR0915", "PLR2004"]
+select = ["B", "C", "E", "F", "ICN", "N", "PL", "PYI", "RUF", "SIM", "TD002", "W"]
+ignore = [
+    "B023",  # Function definition does not bind to loop variable (appears to generate false positives)
+    "B027",  # Empty method in abstract base class (I'm not sure why this should be a problem)
+    "B905",  # `zip()` without an explicit `strict=` parameter
+    # A bunch of rules that are just plain fussy about code complexity:
+    "C901", "PLR0904", "PLR0911", "PLR0912", "PLR0913", "PLR0914", "PLR0915", "PLR0916", "PLR0917", "PLR1702",
+    "E711",  # None comparison (x == None); needed for Pandas/Pixeltable expressions
+    "E712",  # Equality comparisons to `False` (x == False); needed for Pandas/Pixeltable expressions
+    "N801",  # Class name should use CapWords convention (we intentionally violate this for aggregate functions)
+    "PLC0415",  # Allow imports within functions (I don't see how this linting rule could ever work)
+    "PLC1901",  # Allow empty string comparisons
+    "PLC2701",  # Allow private name imports
+    "PLE0605",  # Invalid format for __all__ (appears to generate false positives)
+    "PLR0402",  # Allow `import x.y as y` instead of `from x import y` (needed to avoid circular imports)
+    "PLR2004",  # Permit "magic values" (numbers that are not defined as constants)
+    "PLR6201",  # Don't require set literal for membership tests
+    "PLR6301",  # Class method (not sure what to do yet)
+    "PLW0108",  # Lambda may be unnecessary (gives false positives, e.g., for an arity-reducing lambda)
+    "PLW3201",  # Dunder method has no special meaning (conflicts with _repr_html_)
+    "PYI041",  # Use `float` instead of `int | float` (just seems like a questionable idea)
+    "PYI056",  # Calling .append() on __all__ (it's really fine)
+    "SIM105",  # Don't prefer `contextlib.suppress()`
+    "SIM108",  # Don't prefer use of ternary if/else operator
+    "TD002"  # Don't require author for TODOs
+]
 preview = true
 
 [tool.ruff.lint.isort]
@@ -84,3 +123,7 @@ known-first-party = ["pixeltable_pgserver"]
 
 [tool.ruff.format]
 quote-style = "single"  # can be "single", "double", or "preserve"
+
+[tool.setuptools.packages.find]
+where = ["src"]  # list of folders that contain the packages (["."] by default)
+include = ["pixeltable_pgserver*"]  # package names should match these glob patterns (["*"] by default)
