@@ -142,18 +142,16 @@ class PostgresServer:
                         proc.kill()
                     assert not proc.is_running()
 
-            pgexec(
-                'initdb',
-                (
+            initdb(
+                [
                     '--auth=trust',
                     '--auth-local=trust',
                     '--encoding=utf8',
                     '--locale=C.UTF-8',
                     '-U',
                     self.postgres_user,
-                    '-D',
-                    str(self.pgdata),
-                ),
+                ],
+                pgdata=self.pgdata,
                 user=self.system_user,
             )
         else:
