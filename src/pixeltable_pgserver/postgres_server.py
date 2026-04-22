@@ -142,13 +142,16 @@ class PostgresServer:
                         proc.kill()
                     assert not proc.is_running()
 
+            # Windows' libc doesn't accept "C.UTF-8"; UCRT (Windows 10 1803+) does accept
+            # ".UTF-8", which uses the host's default language with the UTF-8 codepage.
+            locale = '.UTF-8' if platform.system() == 'Windows' else 'C.UTF-8'
             pgexec(
                 'initdb',
                 (
                     '--auth=trust',
                     '--auth-local=trust',
                     '--encoding=utf8',
-                    '--locale=C.UTF-8',
+                    f'--locale={locale}',
                     '-U',
                     self.postgres_user,
                     '-D',
