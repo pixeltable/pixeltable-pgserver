@@ -132,7 +132,14 @@ class PostgresServer:
                         assert not proc.is_running()
 
             initdb(
-                ['--auth=trust', '--auth-local=trust', '--encoding=utf8', '-U', self.postgres_user],
+                [
+                    '--auth=trust',
+                    '--auth-local=trust',
+                    '--encoding=utf8',
+                    '--locale=C.UTF-8',
+                    '-U',
+                    self.postgres_user,
+                ],
                 pgdata=self.pgdata,
                 user=self.system_user,
             )
