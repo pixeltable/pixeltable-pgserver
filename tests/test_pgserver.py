@@ -43,6 +43,30 @@ def _check_sqlalchemy_works(srv: PostgresServer, driver: str | None = None) -> N
         assert result[0] == 1
 
 
+def _check_utf8(srv: PostgresServer) -> None:
+    database_name = 'testdb'
+    uri = srv.get_uri(database_name, 'psycopg')
+
+    if not database_exists(uri):
+        create_database(uri)
+
+    engine = sa.create_engine(uri)
+    conn = engine.connect()
+
+    with conn.begin():
+        # German sharp s -> SS, Spanish ñ -> Ñ, accented é -> É
+        cur = conn.execute(sa.text("select upper('ßñé');"))
+        result = cur.fetchone()
+        assert result
+        assert result[0] == 'SSÑÉ'
+
+        # Chinese characters are recognized as POSIX alphabetic
+        cur = conn.execute(sa.text(r"select '中文' ~ '^[[:alpha:]]+$';"))
+        result = cur.fetchone()
+        assert result
+        assert result[0] is True
+
+
 def _check_time_zones(srv: PostgresServer) -> None:
     # Check that time zone information was properly compiled
     database_name = 'testdb'
@@ -288,6 +312,10 @@ def tmp_postgres() -> Iterator[PostgresServer]:
 def test_pgvector(tmp_postgres: PostgresServer) -> None:
     ret = tmp_postgres.psql('CREATE EXTENSION vector;')
     assert ret.strip() == 'CREATE EXTENSION'
+
+
+def test_utf8(tmp_postgres: PostgresServer) -> None:
+    _check_utf8(tmp_postgres)
 
 
 def test_start_failure_log(caplog: pytest.LogCaptureFixture) -> None:
