@@ -39,6 +39,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade cibuildwheel
+      - name: Setup MSYS2 (Windows)
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            pkg-config
       - name: Restore postgres build from cache
         if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         id: restore-postgres
@@ -55,6 +65,9 @@ jobs:
         if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
         # Run `make` now so that we may cache the postgres build before running cibuildwheel
         # (On Linux cibuildwheel runs in a docker container, so this won't work)
+        # On Windows, route make through MSYS2 bash so autoconf doesn't embed a
+        # space-containing Git-Bash `sh.exe` path into ICU's generated sub-Makefiles.
+        shell: ${{ startsWith(matrix.os, 'windows') && 'msys2 {0}' || 'bash' }}
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
         run: make
