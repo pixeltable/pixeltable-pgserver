@@ -23,7 +23,7 @@ $(POSTGRES_SRC)/configure: $(POSTGRES_SRC).tar.gz
 ## configure
 $(POSTGRES_BLD)/config.status: $(POSTGRES_SRC)/configure
 	mkdir -p $(POSTGRES_BLD)
-	cd $(POSTGRES_BLD) && ../$(POSTGRES_SRC)/configure --prefix=$(INSTALL_PREFIX) --without-icu
+	cd $(POSTGRES_BLD) && ../$(POSTGRES_SRC)/configure --prefix=$(INSTALL_PREFIX) --with-icu
 
 ## build
 # https://stackoverflow.com/questions/68379786/
