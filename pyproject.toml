@@ -63,12 +63,6 @@ test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 [tool.cibuildwheel.linux]
 before-all = "yum install -y readline-devel libicu-devel; make"
 
-[tool.cibuildwheel.macos]
-before-all = "brew install icu4c && brew link --force --overwrite icu4c && make"
-
-[tool.cibuildwheel.windows]
-before-all = "pacman -S --noconfirm mingw-w64-x86_64-icu && make"
-
 [tool.isort]
 force_single_line = false
 line_length = 120

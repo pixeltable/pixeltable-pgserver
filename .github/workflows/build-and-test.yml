@@ -51,6 +51,14 @@ jobs:
             src/pixeltable_pgserver/pginstall
           key: ${{ runner.os }}-${{ runner.arch }}-build-${{ env.cache-name }}-${{
             hashFiles('Makefile', 'pgbuild/Makefile', '.github/workflows/build-and-test.yml') }}
+      - name: Install ICU dependencies
+        if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   brew install icu4c && brew link --force --overwrite icu4c ;;
+            Windows) pacman -S --noconfirm mingw-w64-x86_64-icu ;;
+          esac
       - name: Build postgres and pgvector
         if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
         # Run `make` now so that we may cache the postgres build before running cibuildwheel
