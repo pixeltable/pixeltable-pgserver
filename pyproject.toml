@@ -62,6 +62,10 @@ test-command = "bash -x {project}/cibuildwheel_test.bash {project}"
 
 [tool.cibuildwheel.linux]
 before-all = "yum install -y readline-devel; make"
+# ICU is vendored into pginstall/lib/ by pgbuild/Makefile; postgres resolves it
+# at runtime via RUNPATH=$ORIGIN/../lib. Tell auditwheel not to graft these
+# sonames into .libs/ (it would double-bundle and break our relative rpath).
+repair-wheel-command = "auditwheel repair --exclude libicui18n.so.78 --exclude libicuuc.so.78 --exclude libicudata.so.78 -w {dest_dir} {wheel}"
 
 [tool.isort]
 force_single_line = false
