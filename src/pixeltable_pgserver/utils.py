@@ -232,7 +232,10 @@ class DiskList:
     def get(self) -> list[int]:
         if not self.path.exists():
             return []
-        return json.loads(self.path.read_text())
+        text = self.path.read_text().strip()
+        if not text:
+            return []
+        return json.loads(text)
 
     def put(self, values: list[int]) -> None:
         self.path.write_text(json.dumps(values))
