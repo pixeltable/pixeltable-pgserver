@@ -214,7 +214,7 @@ class DiskList:
         self.path = path
 
     def get_and_add(self, value: int) -> list[int]:
-        old_values = self.get()
+        old_values = self._get()
         values = old_values.copy()
         if value not in values:
             values.append(value)
@@ -222,17 +222,20 @@ class DiskList:
         return old_values
 
     def get_and_remove(self, value: int) -> list[int]:
-        old_values = self.get()
+        old_values = self._get()
         values = old_values.copy()
         if value in values:
             values.remove(value)
             self.put(values)
         return old_values
 
-    def get(self) -> list[int]:
+    def _get(self) -> list[int]:
         if not self.path.exists():
             return []
-        return json.loads(self.path.read_text())
+        text = self.path.read_text().strip()
+        if not text:
+            return []
+        return json.loads(text)
 
     def put(self, values: list[int]) -> None:
         self.path.write_text(json.dumps(values))
