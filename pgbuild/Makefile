@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-INSTALL_RELPATH := ../src/pixeltable_pgserver/pginstall
+INSTALL_RELPATH := ../src/pixeltable_pgserver/$(PGSERVER_INSTALL_PACKAGE)
 INSTALL_PREFIX := $(shell pwd)/$(INSTALL_RELPATH)
 BUILD := $(shell pwd)/pgbuild/
 
@@ -7,12 +7,19 @@ BUILD := $(shell pwd)/pgbuild/
 all: pgvector postgres
 
 ### postgres
-POSTGRES_VERSION := 16.11
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
 POSTGRES_SRC := postgresql-$(POSTGRES_VERSION)
 POSTGRES_BLD := $(POSTGRES_SRC)
 
-$(POSTGRES_SRC).tar.gz:
+.PHONY: check-args
+ifndef POSTGRES_VERSION
+	$(error POSTGRES_VERSION is undefined.)
+endif
+ifndef PGSERVER_INSTALL_PACKAGE
+	$(error PGSERVER_INSTALL_PACKAGE is undefined.)
+endif
+
+$(POSTGRES_SRC).tar.gz: check-args
 	curl -L -O $(POSTGRES_URL)
 
 ## extract
@@ -45,7 +52,7 @@ $(INSTALL_PREFIX)/bin/postgres: $(POSTGRES_BLD)/config.status
 postgres: $(INSTALL_PREFIX)/bin/postgres
 
 ### pgvector
-PGVECTOR_TAG := v0.8.1
+PGVECTOR_TAG := v0.8.4
 PGVECTOR_URL := https://github.com/pgvector/pgvector/archive/refs/tags/$(PGVECTOR_TAG).tar.gz
 PGVECTOR_DIR := pgvector-$(PGVECTOR_TAG)
 
@@ -70,7 +77,7 @@ pgvector: postgres $(INSTALL_PREFIX)/lib/vector.so
 ### other
 .PHONY: clean clean-all
 clean:
-	rm -rf $(INSTALL_PREFIX)
+	rm -rf ../src/pixeltable_pgserver/pginstall*
 	rm -rf postgresql-*
 	rm -rf pgvector-*
 	rm -rf *.tar.gz

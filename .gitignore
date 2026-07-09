@@ -1,10 +1,11 @@
 .eggs
 .idea
+.vscode
 **/__pycache__
 *.egg-info
 *.iml
 *.so
-build
-dist
-pgbuild
-src/pixeltable_pgserver/pginstall
+/build
+/dist
+/pgbuild
+/src/pixeltable_pgserver/pginstall*

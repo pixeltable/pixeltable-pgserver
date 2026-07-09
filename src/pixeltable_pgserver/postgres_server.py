@@ -119,9 +119,9 @@ class PostgresServer:
             # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
             # way to test this:
             #
-            # python -c 'import pixeltable as pxt; pxt.Client()'
+            # python -c 'import pixeltable as pxt; pxt.init()'
             # rm -rf ~/.pixeltable/
-            # python -c 'import pixeltable as pxt; pxt.Client()'
+            # python -c 'import pixeltable as pxt; pxt.init()'
             _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
             for proc in psutil.process_iter(attrs=('name', 'cmdline')):
                 if (
@@ -322,3 +322,27 @@ def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop') -> Postgre
         return PostgresServer._instances[pgdata]
 
     return PostgresServer(pgdata, cleanup_mode=cleanup_mode)
+
+
+def installed_pg_version() -> str:
+    """Returns the installed version of postgres."""
+    return pgexec('postgres', ('--version',)).strip().split()[-1]
+
+
+def pgdata_version(pgdata: Path | str) -> str | None:
+    """Returns the version of postgres that initialized the given pgdata directory,
+    or None if it is not initialized."""
+    if isinstance(pgdata, str):
+        pgdata = Path(pgdata)
+    pgdata = pgdata.expanduser().resolve()
+
+    version_file = pgdata / 'PG_VERSION'
+    if not version_file.exists():
+        return None
+
+    return version_file.read_text().strip()
+
+
+def upgrade_db(pgdata: Path | str) -> None:
+    """Upgrades the given pgdata directory to the installed version of postgres."""
+    pgexec('pg_upgrade', ('-d', str(pgdata), '-D', str(pgdata), '-b', str(POSTGRES_BIN_PATH), '-B', str(POSTGRES_BIN_PATH)))

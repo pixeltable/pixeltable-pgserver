@@ -58,7 +58,7 @@ def pgexec(command: str, args: Sequence[str], **subprocess_kwargs: Any) -> str:
                 'Failed postgres command %s with kwargs: `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n',
                 err.args,
                 subprocess_kwargs,
-                str(err),
+                err,
                 output,
                 error,
             )
