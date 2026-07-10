@@ -11,15 +11,13 @@ POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postg
 POSTGRES_SRC := postgresql-$(POSTGRES_VERSION)
 POSTGRES_BLD := $(POSTGRES_SRC)
 
-.PHONY: check-args
+$(POSTGRES_SRC).tar.gz:
 ifndef POSTGRES_VERSION
 	$(error POSTGRES_VERSION is undefined.)
 endif
 ifndef PGSERVER_INSTALL_PACKAGE
 	$(error PGSERVER_INSTALL_PACKAGE is undefined.)
 endif
-
-$(POSTGRES_SRC).tar.gz: check-args
 	curl -L -O $(POSTGRES_URL)
 
 ## extract
@@ -52,9 +50,9 @@ $(INSTALL_PREFIX)/bin/postgres: $(POSTGRES_BLD)/config.status
 postgres: $(INSTALL_PREFIX)/bin/postgres
 
 ### pgvector
-PGVECTOR_TAG := v0.8.4
+PGVECTOR_TAG := v0.8.5
 PGVECTOR_URL := https://github.com/pgvector/pgvector/archive/refs/tags/$(PGVECTOR_TAG).tar.gz
-PGVECTOR_DIR := pgvector-$(PGVECTOR_TAG)
+PGVECTOR_DIR := pgvector-$(POSTGRES_VERSION)-$(PGVECTOR_TAG)
 
 $(PGVECTOR_DIR).tar.gz:
 	curl -L -o $(PGVECTOR_DIR).tar.gz $(PGVECTOR_URL)

@@ -18,7 +18,7 @@ wheel: build
 	python setup.py bdist_wheel
 
 install-wheel: wheel
-	python -m pip install dist/*.whl
+	python -m pip install dist/*.whl --force-reinstall
 
 install-dev: check-conda build
 	python -m pip install -e .[dev,test]

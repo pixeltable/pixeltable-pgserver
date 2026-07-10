@@ -2,6 +2,7 @@ import atexit
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,7 +18,7 @@ import psutil
 from typing_extensions import Self
 
 from .pgexec import pgexec
-from .utils import POSTGRES_BIN_PATH, DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
+from .utils import POSTGRES_BIN_PATH, POSTGRES_16_BIN_PATH, DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
 
 if platform.system() != 'Windows':
     from .utils import ensure_folder_permissions, ensure_prefix_permissions, ensure_user_exists
@@ -68,6 +69,7 @@ class PostgresServer:
         self._postmaster_info: PostmasterInfo | None = None
         self._count = 0
 
+    def start(self) -> None:
         atexit.register(self._cleanup)
         with self._lock:
             self._instances[self.pgdata] = self
@@ -99,12 +101,15 @@ class PostgresServer:
             assert self.system_user is not None
             ensure_prefix_permissions(self.pgdata)
             ensure_prefix_permissions(POSTGRES_BIN_PATH)
+            ensure_prefix_permissions(POSTGRES_16_BIN_PATH)
 
             read_perm = stat.S_IRGRP | stat.S_IROTH
             execute_perm = stat.S_IXGRP | stat.S_IXOTH
             # for envs like cibuildwheel docker, where the user is has no permission otherwise
             ensure_folder_permissions(POSTGRES_BIN_PATH, execute_perm | read_perm)
             ensure_folder_permissions(POSTGRES_BIN_PATH.parent / 'lib', read_perm)
+            ensure_folder_permissions(POSTGRES_16_BIN_PATH, execute_perm | read_perm)
+            ensure_folder_permissions(POSTGRES_16_BIN_PATH.parent / 'lib', read_perm)
 
             os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
 
@@ -296,7 +301,7 @@ class PostgresServer:
         self._cleanup()
 
 
-def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop') -> PostgresServer:
+def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop', start: bool = True) -> PostgresServer:
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
@@ -321,15 +326,19 @@ def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop') -> Postgre
     if pgdata in PostgresServer._instances:
         return PostgresServer._instances[pgdata]
 
-    return PostgresServer(pgdata, cleanup_mode=cleanup_mode)
+    server = PostgresServer(pgdata, cleanup_mode=cleanup_mode)
+    if start:
+        server.start()
+    return server
 
 
-def installed_pg_version() -> str:
-    """Returns the installed version of postgres."""
-    return pgexec('postgres', ('--version',)).strip().split()[-1]
+def installed_pg_version() -> int:
+    """Returns the installed major version of postgres."""
+    full_version = pgexec('postgres', ('--version',)).strip().split()[-1]
+    return int(full_version.split('.')[0])
 
 
-def pgdata_version(pgdata: Path | str) -> str | None:
+def pgdata_version(pgdata: Path | str) -> int | None:
     """Returns the version of postgres that initialized the given pgdata directory,
     or None if it is not initialized."""
     if isinstance(pgdata, str):
@@ -340,9 +349,57 @@ def pgdata_version(pgdata: Path | str) -> str | None:
     if not version_file.exists():
         return None
 
-    return version_file.read_text().strip()
+    return int(version_file.read_text().strip())
 
 
 def upgrade_db(pgdata: Path | str) -> None:
     """Upgrades the given pgdata directory to the installed version of postgres."""
-    pgexec('pg_upgrade', ('-d', str(pgdata), '-D', str(pgdata), '-b', str(POSTGRES_BIN_PATH), '-B', str(POSTGRES_BIN_PATH)))
+    if isinstance(pgdata, str):
+        pgdata = Path(pgdata)
+    pgdata = pgdata.expanduser().resolve()
+
+    target_version = installed_pg_version()
+    current_version = pgdata_version(pgdata)
+    if current_version is None or current_version == target_version:
+        # Nothing to do
+        return None
+
+    assert current_version == 16, (
+        'Unexpectedly encountered a pgdata folder with a version of postgres that was never supported.'
+    )
+
+    print('Upgrading pgdata from version %s to %s: %s', current_version, target_version, pgdata)
+
+    old_server = get_server(pgdata, start=False)
+    with old_server._lock:
+        postmaster_info = PostmasterInfo.read_from_pgdata(pgdata)
+        if postmaster_info is not None and postmaster_info.is_running():
+            print('Stopping existing pgserver: %s', postmaster_info)
+            pgexec('pg_ctl', ('-D', str(pgdata), 'stop'), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
+
+        # Our postgres 16 pgdata dirs don't have checksums enabled, but postgres 18 has them on by default.
+        # We need to do something here; recommended practice is to enable checksums on the old cluster
+        # before upgrading.
+        control_data = pgexec('pg_controldata', ('-D', str(pgdata)), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
+        match = re.search(r'Data page checksum version:\s*(\d+)', control_data)
+        if not match:
+            raise RuntimeError('Could not find checksum version in pg_controldata output')
+        checksum_version = int(match.group(1))
+        if checksum_version == 0:
+            print('Enabling checksums in existing pgdata directory.')
+            pgexec('pg_checksums', ('-D', str(pgdata), '--enable'), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
+
+    print('Initializing new pgdata directory for upgrade.')
+    tmp_dir = Path(tempfile.mkdtemp())
+    new_server = get_server(tmp_dir, start=False)
+    new_server.ensure_pgdata_inited()
+
+    print('Running pg_upgrade.')
+    # Run the upgarde with the *new* server's `pg_upgrade` binary, pointing to the *old* server with -b
+    pgexec('pg_upgrade', ('-b', POSTGRES_16_BIN_PATH, '-d', str(pgdata), '-D', str(tmp_dir), '-U', new_server.postgres_user), user=new_server.system_user)
+
+    print('Moving directories into place.')
+    pgdata.rename(Path(str(pgdata) + '.old'))
+    tmp_dir.rename(pgdata)
+
+    print('pgdata upgrade complete.')

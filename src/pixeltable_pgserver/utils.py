@@ -15,7 +15,11 @@ if TYPE_CHECKING:
     import pwd
 
 
-POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
+# Active version of postgres
+POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall18' / 'bin'
+
+# Other version(s) of postgres installed for upgrade purposes
+POSTGRES_16_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
