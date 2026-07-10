@@ -18,7 +18,14 @@ import psutil
 from typing_extensions import Self
 
 from .pgexec import pgexec
-from .utils import POSTGRES_BIN_PATH, POSTGRES_16_BIN_PATH, DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
+from .utils import (
+    POSTGRES_16_BIN_PATH,
+    POSTGRES_BIN_PATH,
+    DiskList,
+    PostmasterInfo,
+    find_suitable_port,
+    find_suitable_socket_dir,
+)
 
 if platform.system() != 'Windows':
     from .utils import ensure_folder_permissions, ensure_prefix_permissions, ensure_user_exists
@@ -380,14 +387,21 @@ def upgrade_db(pgdata: Path | str) -> None:
         # Our postgres 16 pgdata dirs don't have checksums enabled, but postgres 18 has them on by default.
         # We need to do something here; recommended practice is to enable checksums on the old cluster
         # before upgrading.
-        control_data = pgexec('pg_controldata', ('-D', str(pgdata)), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
+        control_data = pgexec(
+            'pg_controldata', ('-D', str(pgdata)), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user
+        )
         match = re.search(r'Data page checksum version:\s*(\d+)', control_data)
         if not match:
             raise RuntimeError('Could not find checksum version in pg_controldata output')
         checksum_version = int(match.group(1))
         if checksum_version == 0:
             print('Enabling checksums in existing pgdata directory.')
-            pgexec('pg_checksums', ('-D', str(pgdata), '--enable'), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
+            pgexec(
+                'pg_checksums',
+                ('-D', str(pgdata), '--enable'),
+                bin_path=POSTGRES_16_BIN_PATH,
+                user=old_server.system_user,
+            )
 
     print('Initializing new pgdata directory for upgrade.')
     tmp_dir = Path(tempfile.mkdtemp())
@@ -396,7 +410,11 @@ def upgrade_db(pgdata: Path | str) -> None:
 
     print('Running pg_upgrade.')
     # Run the upgarde with the *new* server's `pg_upgrade` binary, pointing to the *old* server with -b
-    pgexec('pg_upgrade', ('-b', POSTGRES_16_BIN_PATH, '-d', str(pgdata), '-D', str(tmp_dir), '-U', new_server.postgres_user), user=new_server.system_user)
+    pgexec(
+        'pg_upgrade',
+        ('-b', str(POSTGRES_16_BIN_PATH), '-d', str(pgdata), '-D', str(tmp_dir), '-U', new_server.postgres_user),
+        user=new_server.system_user,
+    )
 
     print('Moving directories into place.')
     pgdata.rename(Path(str(pgdata) + '.old'))
