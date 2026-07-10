@@ -404,20 +404,31 @@ def upgrade_db(pgdata: Path | str) -> None:
             )
 
     print('Initializing new pgdata directory for upgrade.')
-    tmp_dir = Path(tempfile.mkdtemp())
-    new_server = get_server(tmp_dir, start=False)
-    new_server.ensure_pgdata_inited()
+    tmp_cluster_dir = Path(tempfile.mkdtemp())
+    tmp_server = get_server(tmp_cluster_dir, start=False)
+
+    tmp_server.ensure_pgdata_inited()
 
     print('Running pg_upgrade.')
     # Run the upgarde with the *new* server's `pg_upgrade` binary, pointing to the *old* server with -b
+    tmp_cwd = Path(tempfile.mkdtemp())
     pgexec(
         'pg_upgrade',
-        ('-b', str(POSTGRES_16_BIN_PATH), '-d', str(pgdata), '-D', str(tmp_dir), '-U', new_server.postgres_user),
-        user=new_server.system_user,
+        ('-b', str(POSTGRES_16_BIN_PATH), '-d', str(pgdata), '-D', str(tmp_cluster_dir), '-U', tmp_server.postgres_user),
+        user=tmp_server.system_user,
+        cwd=tmp_cwd,
     )
 
     print('Moving directories into place.')
     pgdata.rename(Path(str(pgdata) + '.old'))
-    tmp_dir.rename(pgdata)
+    tmp_cluster_dir.rename(pgdata)
+
+    new_server = get_server(pgdata)
+    # Run update_extensions.sql
+    update_extensions_file = tmp_cwd / 'update_extensions.sql'
+    print(f'Running script: {update_extensions_file}')
+    with open(update_extensions_file, encoding='utf-8') as fp:
+        sql = fp.read()
+        new_server.psql(sql)
 
     print('pgdata upgrade complete.')
