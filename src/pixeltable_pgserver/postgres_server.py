@@ -375,13 +375,13 @@ def upgrade_db(pgdata: Path | str) -> None:
         'Unexpectedly encountered a pgdata folder with a version of postgres that was never supported.'
     )
 
-    print('Upgrading pgdata from version %s to %s: %s', current_version, target_version, pgdata)
+    _logger.info('Upgrading pgdata from version %s to %s: %s', current_version, target_version, pgdata)
 
     old_server = get_server(pgdata, start=False)
     with old_server._lock:
         postmaster_info = PostmasterInfo.read_from_pgdata(pgdata)
         if postmaster_info is not None and postmaster_info.is_running():
-            print('Stopping existing pgserver: %s', postmaster_info)
+            _logger.info('Stopping existing pgserver: %s', postmaster_info)
             pgexec('pg_ctl', ('-D', str(pgdata), 'stop'), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
 
         # Our postgres 16 pgdata dirs don't have checksums enabled, but postgres 18 has them on by default.
@@ -395,7 +395,7 @@ def upgrade_db(pgdata: Path | str) -> None:
             raise RuntimeError('Could not find checksum version in pg_controldata output')
         checksum_version = int(match.group(1))
         if checksum_version == 0:
-            print('Enabling checksums in existing pgdata directory.')
+            _logger.info('Enabling checksums in existing pgdata directory.')
             pgexec(
                 'pg_checksums',
                 ('-D', str(pgdata), '--enable'),
@@ -403,13 +403,13 @@ def upgrade_db(pgdata: Path | str) -> None:
                 user=old_server.system_user,
             )
 
-    print('Initializing new pgdata directory for upgrade.')
+    _logger.info('Initializing new pgdata directory for upgrade.')
     tmp_cluster_dir = Path(tempfile.mkdtemp())
     tmp_server = get_server(tmp_cluster_dir, start=False)
 
     tmp_server.ensure_pgdata_inited()
 
-    print('Running pg_upgrade.')
+    _logger.info('Running pg_upgrade.')
     # Run the upgarde with the *new* server's `pg_upgrade` binary, pointing to the *old* server with -b
     tmp_cwd = Path(tempfile.mkdtemp())
     pgexec(
@@ -428,16 +428,16 @@ def upgrade_db(pgdata: Path | str) -> None:
         cwd=tmp_cwd,
     )
 
-    print('Moving directories into place.')
+    _logger.info('Moving directories into place.')
     pgdata.rename(Path(str(pgdata) + '.old'))
     tmp_cluster_dir.rename(pgdata)
 
     new_server = get_server(pgdata)
     # Run update_extensions.sql
     update_extensions_file = tmp_cwd / 'update_extensions.sql'
-    print(f'Running script: {update_extensions_file}')
+    _logger.info(f'Running script: {update_extensions_file}')
     with open(update_extensions_file, encoding='utf-8') as fp:
         sql = fp.read()
         new_server.psql(sql)
 
-    print('pgdata upgrade complete.')
+    _logger.info('pgdata upgrade complete.')
