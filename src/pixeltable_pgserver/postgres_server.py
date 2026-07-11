@@ -414,7 +414,16 @@ def upgrade_db(pgdata: Path | str) -> None:
     tmp_cwd = Path(tempfile.mkdtemp())
     pgexec(
         'pg_upgrade',
-        ('-b', str(POSTGRES_16_BIN_PATH), '-d', str(pgdata), '-D', str(tmp_cluster_dir), '-U', tmp_server.postgres_user),
+        (
+            '-b',
+            str(POSTGRES_16_BIN_PATH),
+            '-d',
+            str(pgdata),
+            '-D',
+            str(tmp_cluster_dir),
+            '-U',
+            tmp_server.postgres_user,
+        ),
         user=tmp_server.system_user,
         cwd=tmp_cwd,
     )

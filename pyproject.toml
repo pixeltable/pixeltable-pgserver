@@ -51,6 +51,8 @@ test = [
     "sqlalchemy>=2",
     "sqlalchemy-utils",
     "mypy",
+    "types-psutil",
+    "types-sqlalchemy-utils",
 ]
 
 [tool.cibuildwheel]
