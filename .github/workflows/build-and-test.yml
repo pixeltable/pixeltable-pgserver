@@ -39,6 +39,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade cibuildwheel
+      - name: Install flex and bison (Windows)
+        # PostgreSQL 18 requires flex + bison to build from the release tarball (unlike
+        # <=16, whose tarball ships pre-generated parser/scanner sources). winflexbison
+        # provides standalone win_flex/win_bison binaries with no MSYS2 runtime dependency.
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        run: choco install --no-progress -y winflexbison3
       - name: Restore postgres build from cache
         if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         id: restore-postgres
@@ -58,6 +64,10 @@ jobs:
         # (On Linux cibuildwheel runs in a docker container, so this won't work)
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
+          # Point PG's configure at winflexbison's binaries on Windows; empty elsewhere so
+          # Linux/macOS auto-detect their own flex/bison.
+          FLEX: ${{ startsWith(matrix.os, 'windows') && 'win_flex' || '' }}
+          BISON: ${{ startsWith(matrix.os, 'windows') && 'win_bison' || '' }}
         run: make
       - name: Save postgres build
         if: ${{ !startsWith(matrix.os, 'ubuntu') && !steps.restore-postgres.outputs.cache-hit }}
