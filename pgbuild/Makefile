@@ -4,7 +4,15 @@ INSTALL_PREFIX := $(shell pwd)/$(INSTALL_RELPATH)
 BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
-all: pgvector postgres
+all: fixup
+
+# Rewrite the absolute dylib install names Postgres bakes in to @rpath-relative form, so
+# the install tree is relocatable and PG16 + PG18 can coexist in one wheel without a
+# delocate basename collision (e.g. two libpq.5.dylib). No-op off macOS. Runs last, after
+# both postgres and pgvector have installed their libraries into $(INSTALL_PREFIX).
+.PHONY: fixup
+fixup: pgvector postgres
+	bash fixup_macos_rpaths.sh $(INSTALL_PREFIX)
 
 ### postgres
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
