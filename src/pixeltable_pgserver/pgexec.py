@@ -5,12 +5,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from .utils import POSTGRES_BIN_PATH
-
 _logger = logging.getLogger('pixeltable_pgserver')
 
 
-def pgexec(command: str, args: Sequence[str], bin_path: Path = POSTGRES_BIN_PATH, **subprocess_kwargs: Any) -> str:
+def pgexec(command: str, args: Sequence[str], bin_path: Path, **subprocess_kwargs: Any) -> str:
     """
     Run a postgres command with the given command line arguments.
     Args:

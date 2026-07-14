@@ -19,8 +19,8 @@ from typing_extensions import Self
 
 from .pgexec import pgexec
 from .utils import (
-    POSTGRES_16_BIN_PATH,
-    POSTGRES_BIN_PATH,
+    LATEST_POSTGRES_VERSION,
+    POSTGRES_VERSIONS,
     DiskList,
     PostmasterInfo,
     find_suitable_port,
@@ -50,11 +50,17 @@ class PostgresServer:
     lock_path = runtime_path / '.lockfile'
     _lock = fasteners.InterProcessLock(lock_path)
 
-    def __init__(self, pgdata: Path, *, cleanup_mode: str | None = 'stop'):
+    bin_path: Path
+
+    def __init__(self, pgdata: Path, *, cleanup_mode: str | None = 'stop', postgres_version: int = 18):
         """Initializes the postgresql server instance.
         Constructor is intended to be called directly, use get_server() instead.
         """
         assert cleanup_mode in (None, 'stop', 'delete')
+
+        self.bin_path = POSTGRES_VERSIONS.get(postgres_version)
+        if self.bin_path is None:
+            raise ValueError(f'Unsupported postgres version: {postgres_version}')
 
         self.pgdata = pgdata
         self.log = self.pgdata / 'log'
@@ -107,16 +113,14 @@ class PostgresServer:
 
             assert self.system_user is not None
             ensure_prefix_permissions(self.pgdata)
-            ensure_prefix_permissions(POSTGRES_BIN_PATH)
-            ensure_prefix_permissions(POSTGRES_16_BIN_PATH)
 
             read_perm = stat.S_IRGRP | stat.S_IROTH
             execute_perm = stat.S_IXGRP | stat.S_IXOTH
-            # for envs like cibuildwheel docker, where the user is has no permission otherwise
-            ensure_folder_permissions(POSTGRES_BIN_PATH, execute_perm | read_perm)
-            ensure_folder_permissions(POSTGRES_BIN_PATH.parent / 'lib', read_perm)
-            ensure_folder_permissions(POSTGRES_16_BIN_PATH, execute_perm | read_perm)
-            ensure_folder_permissions(POSTGRES_16_BIN_PATH.parent / 'lib', read_perm)
+            for path in POSTGRES_VERSIONS.values():
+                ensure_prefix_permissions(path)
+                # for envs like cibuildwheel docker, where the user has no permissions otherwise
+                ensure_folder_permissions(path, execute_perm | read_perm)
+                ensure_folder_permissions(path.parent / 'lib', read_perm)
 
             os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
 
@@ -165,6 +169,7 @@ class PostgresServer:
                     '-D',
                     str(self.pgdata),
                 ),
+                bin_path=self.bin_path,
                 user=self.system_user,
             )
         else:
@@ -217,7 +222,14 @@ class PostgresServer:
             try:
                 pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), '-D', str(self.pgdata), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
-                pgexec('pg_ctl', pg_ctl_args, user=self.system_user, timeout=10, **subprocess_kwargs)
+                pgexec(
+                    'pg_ctl',
+                    pg_ctl_args,
+                    bin_path=self.bin_path,
+                    user=self.system_user,
+                    timeout=10,
+                    **subprocess_kwargs,
+                )
 
             except subprocess.SubprocessError:
                 _logger.error(
@@ -263,7 +275,12 @@ class PostgresServer:
                 assert self._postmaster_info.process is not None
                 if self._postmaster_info.process.is_running():
                     try:
-                        pgexec('pg_ctl', ('-w', '-D', str(self.pgdata), 'stop'), user=self.system_user)
+                        pgexec(
+                            'pg_ctl',
+                            ('-w', '-D', str(self.pgdata), 'stop'),
+                            bin_path=self.bin_path,
+                            user=self.system_user,
+                        )
                         stopped = True
                     except subprocess.CalledProcessError:
                         stopped = False
@@ -288,7 +305,7 @@ class PostgresServer:
 
     def psql(self, command: str) -> str:
         """Runs a psql command on this server. The command is passed to psql via stdin."""
-        executable = POSTGRES_BIN_PATH / 'psql'
+        executable = POSTGRES_VERSIONS[LATEST_POSTGRES_VERSION] / 'psql'
         stdout = subprocess.check_output(f'{executable} {self.get_uri()}', input=command.encode(), shell=True)
         return stdout.decode('utf-8')
 
@@ -308,7 +325,9 @@ class PostgresServer:
         self._cleanup()
 
 
-def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop', start: bool = True) -> PostgresServer:
+def get_server(
+    pgdata: Path | str, *, cleanup_mode: str | None = 'stop', start: bool = True, postgres_version: int = 18
+) -> PostgresServer:
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
@@ -333,16 +352,10 @@ def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop', start: boo
     if pgdata in PostgresServer._instances:
         return PostgresServer._instances[pgdata]
 
-    server = PostgresServer(pgdata, cleanup_mode=cleanup_mode)
+    server = PostgresServer(pgdata, cleanup_mode=cleanup_mode, postgres_version=postgres_version)
     if start:
         server.start()
     return server
-
-
-def installed_pg_version() -> int:
-    """Returns the installed major version of postgres."""
-    full_version = pgexec('postgres', ('--version',)).strip().split()[-1]
-    return int(full_version.split('.')[0])
 
 
 def pgdata_version(pgdata: Path | str) -> int | None:
@@ -360,35 +373,35 @@ def pgdata_version(pgdata: Path | str) -> int | None:
 
 
 def upgrade_db(pgdata: Path | str) -> None:
-    """Upgrades the given pgdata directory to the installed version of postgres."""
+    """Upgrades the given pgdata directory to the latest version of postgres."""
     if isinstance(pgdata, str):
         pgdata = Path(pgdata)
     pgdata = pgdata.expanduser().resolve()
 
-    target_version = installed_pg_version()
+    target_version = LATEST_POSTGRES_VERSION
     current_version = pgdata_version(pgdata)
     if current_version is None or current_version == target_version:
         # Nothing to do
         return None
 
-    assert current_version == 16, (
+    assert current_version in POSTGRES_VERSIONS, (
         'Unexpectedly encountered a pgdata folder with a version of postgres that was never supported.'
     )
 
     _logger.info('Upgrading pgdata from version %s to %s: %s', current_version, target_version, pgdata)
 
-    old_server = get_server(pgdata, start=False)
+    old_server = get_server(pgdata, start=False, postgres_version=current_version)
     with old_server._lock:
         postmaster_info = PostmasterInfo.read_from_pgdata(pgdata)
         if postmaster_info is not None and postmaster_info.is_running():
             _logger.info('Stopping existing pgserver: %s', postmaster_info)
-            pgexec('pg_ctl', ('-D', str(pgdata), 'stop'), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user)
+            pgexec('pg_ctl', ('-D', str(pgdata), 'stop'), bin_path=old_server.bin_path, user=old_server.system_user)
 
         # Our postgres 16 pgdata dirs don't have checksums enabled, but postgres 18 has them on by default.
         # We need to do something here; recommended practice is to enable checksums on the old cluster
         # before upgrading.
         control_data = pgexec(
-            'pg_controldata', ('-D', str(pgdata)), bin_path=POSTGRES_16_BIN_PATH, user=old_server.system_user
+            'pg_controldata', ('-D', str(pgdata)), bin_path=old_server.bin_path, user=old_server.system_user
         )
         match = re.search(r'Data page checksum version:\s*(\d+)', control_data)
         if not match:
@@ -399,7 +412,7 @@ def upgrade_db(pgdata: Path | str) -> None:
             pgexec(
                 'pg_checksums',
                 ('-D', str(pgdata), '--enable'),
-                bin_path=POSTGRES_16_BIN_PATH,
+                bin_path=old_server.bin_path,
                 user=old_server.system_user,
             )
 
@@ -416,7 +429,7 @@ def upgrade_db(pgdata: Path | str) -> None:
         'pg_upgrade',
         (
             '-b',
-            str(POSTGRES_16_BIN_PATH),
+            str(old_server.bin_path),
             '-d',
             str(pgdata),
             '-D',
@@ -424,6 +437,7 @@ def upgrade_db(pgdata: Path | str) -> None:
             '-U',
             tmp_server.postgres_user,
         ),
+        bin_path=POSTGRES_VERSIONS[LATEST_POSTGRES_VERSION],
         user=tmp_server.system_user,
         cwd=tmp_cwd,
     )
