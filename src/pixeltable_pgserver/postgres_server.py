@@ -437,7 +437,7 @@ def upgrade_db(pgdata: Path | str) -> None:
             )
 
     _logger.info('Initializing new pgdata directory for upgrade.')
-    tmp_cluster_dir = Path(tempfile.mkdtemp())
+    tmp_cluster_dir = Path(tempfile.mkdtemp(dir=pgdata.parent, prefix='.pgdata-tmp-'))
     tmp_server = get_server(tmp_cluster_dir, start=False)
 
     tmp_server.ensure_pgdata_inited()
