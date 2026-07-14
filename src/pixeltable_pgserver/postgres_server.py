@@ -361,11 +361,16 @@ def get_server(
     if not pgdata.parent.exists():
         raise FileNotFoundError(f'Parent directory of pgdata does not exist: {pgdata.parent}')
 
-    if not pgdata.exists():
-        pgdata.mkdir(parents=False, exist_ok=False)
+    version = pgdata_version(pgdata)
+    if version is not None and version != postgres_version:
+        raise RuntimeError(
+            f'Version mismatch: expecting version {postgres_version} but found version {version}: {pgdata}'
+        )
 
     if pgdata in PostgresServer._instances:
         return PostgresServer._instances[pgdata]
+
+    pgdata.mkdir(parents=False, exist_ok=True)
 
     server = PostgresServer(pgdata, cleanup_mode=cleanup_mode, postgres_version=postgres_version)
     if start:
@@ -397,7 +402,7 @@ def upgrade_db(pgdata: Path | str) -> None:
     current_version = pgdata_version(pgdata)
     if current_version is None or current_version == target_version:
         # Nothing to do
-        return None
+        return
 
     assert current_version in POSTGRES_VERSIONS, (
         'Unexpectedly encountered a pgdata folder with a version of postgres that was never supported.'
