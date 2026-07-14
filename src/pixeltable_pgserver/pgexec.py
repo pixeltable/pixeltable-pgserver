@@ -2,14 +2,13 @@ import logging
 import platform
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import Any, Sequence
-
-from .utils import POSTGRES_BIN_PATH
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
 
-def pgexec(command: str, args: Sequence[str], **subprocess_kwargs: Any) -> str:
+def pgexec(command: str, args: Sequence[str], bin_path: Path, **subprocess_kwargs: Any) -> str:
     """
     Run a postgres command with the given command line arguments.
     Args:
@@ -26,7 +25,7 @@ def pgexec(command: str, args: Sequence[str], **subprocess_kwargs: Any) -> str:
     if platform.system() == 'Windows':
         command += '.exe'
 
-    cmdline = (str(POSTGRES_BIN_PATH / command), *args)
+    cmdline = (str(bin_path / command), *args)
 
     with (
         tempfile.TemporaryFile('w+', encoding='utf-8') as stdout,
@@ -58,7 +57,7 @@ def pgexec(command: str, args: Sequence[str], **subprocess_kwargs: Any) -> str:
                 'Failed postgres command %s with kwargs: `%s`:\nerror:\n%s\nstdout:\n%s\n---\nstderr:\n%s\n---\n',
                 err.args,
                 subprocess_kwargs,
-                str(err),
+                err,
                 output,
                 error,
             )

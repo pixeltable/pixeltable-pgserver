@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import os
 import platform
 import socket
 import stat
@@ -15,7 +16,16 @@ if TYPE_CHECKING:
     import pwd
 
 
-POSTGRES_BIN_PATH = Path(__file__).parent / 'pginstall' / 'bin'
+POSTGRES_VERSIONS = {
+    16: Path(__file__).parent / 'pginstall' / 'bin',
+    18: Path(__file__).parent / 'pginstall18' / 'bin',
+}
+TARGET_POSTGRES_VERSION = int(os.environ.get('PGSERVER_POSTGRES_VERSION', '18'))
+
+if TARGET_POSTGRES_VERSION not in POSTGRES_VERSIONS:
+    raise RuntimeError(
+        f'Unsupported Postgres version: {TARGET_POSTGRES_VERSION} (supported: {list(POSTGRES_VERSIONS.keys())})'
+    )
 
 _logger = logging.getLogger('pixeltable_pgserver')
 

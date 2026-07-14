@@ -1,3 +1,4 @@
 # ruff: noqa: F401
 
-from .postgres_server import PostgresServer, get_server
+from .postgres_server import PostgresServer, get_server, pgdata_version, upgrade_db
+from .utils import TARGET_POSTGRES_VERSION

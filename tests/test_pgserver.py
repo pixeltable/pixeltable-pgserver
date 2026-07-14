@@ -212,7 +212,7 @@ def test_pg_ctl() -> None:
         pid = None
         try:
             with get_server(tmpdir) as pg:
-                output = pgexec('pg_ctl', ('-D', str(pg.pgdata), 'status'))
+                output = pgexec('pg_ctl', ('-D', str(pg.pgdata), 'status'), bin_path=pg.bin_path)
                 assert 'server is running' in output.splitlines()[0]
 
         finally:

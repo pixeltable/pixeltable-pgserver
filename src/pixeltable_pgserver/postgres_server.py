@@ -2,6 +2,7 @@ import atexit
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,7 +18,14 @@ import psutil
 from typing_extensions import Self
 
 from .pgexec import pgexec
-from .utils import POSTGRES_BIN_PATH, DiskList, PostmasterInfo, find_suitable_port, find_suitable_socket_dir
+from .utils import (
+    POSTGRES_VERSIONS,
+    TARGET_POSTGRES_VERSION,
+    DiskList,
+    PostmasterInfo,
+    find_suitable_port,
+    find_suitable_socket_dir,
+)
 
 if platform.system() != 'Windows':
     from .utils import ensure_folder_permissions, ensure_prefix_permissions, ensure_user_exists
@@ -42,11 +50,19 @@ class PostgresServer:
     lock_path = runtime_path / '.lockfile'
     _lock = fasteners.InterProcessLock(lock_path)
 
-    def __init__(self, pgdata: Path, *, cleanup_mode: str | None = 'stop'):
+    bin_path: Path
+
+    def __init__(
+        self, pgdata: Path, *, cleanup_mode: str | None = 'stop', postgres_version: int = TARGET_POSTGRES_VERSION
+    ) -> None:
         """Initializes the postgresql server instance.
         Constructor is intended to be called directly, use get_server() instead.
         """
         assert cleanup_mode in (None, 'stop', 'delete')
+
+        self.bin_path = POSTGRES_VERSIONS.get(postgres_version)
+        if self.bin_path is None:
+            raise ValueError(f'Unsupported postgres version: {postgres_version}')
 
         self.pgdata = pgdata
         self.log = self.pgdata / 'log'
@@ -68,12 +84,45 @@ class PostgresServer:
         self._postmaster_info: PostmasterInfo | None = None
         self._count = 0
 
+    def start(self) -> None:
         atexit.register(self._cleanup)
         with self._lock:
             self._instances[self.pgdata] = self
             self.ensure_pgdata_inited()
             self.ensure_postgres_running()
             self.global_process_id_list.get_and_add(os.getpid())
+
+    def stop(self) -> None:
+        with self._lock:
+            self._stop()
+
+    def _stop(self) -> None:
+        if self._postmaster_info is None:
+            return
+
+        assert self._postmaster_info.process is not None
+        if not self._postmaster_info.process.is_running():
+            return
+
+        try:
+            pgexec(
+                'pg_ctl',
+                ('-w', '-D', str(self.pgdata), 'stop'),
+                bin_path=self.bin_path,
+                user=self.system_user,
+            )
+            return
+        except subprocess.CalledProcessError:
+            pass
+
+        _logger.warning('Failed to stop server; killing it instead.')
+        self._postmaster_info.process.terminate()
+        try:
+            self._postmaster_info.process.wait(2)
+        except psutil.TimeoutExpired:
+            pass
+        if self._postmaster_info.process.is_running():
+            self._postmaster_info.process.kill()
 
     def get_postmaster_info(self) -> PostmasterInfo:
         assert self._postmaster_info is not None
@@ -98,13 +147,14 @@ class PostgresServer:
 
             assert self.system_user is not None
             ensure_prefix_permissions(self.pgdata)
-            ensure_prefix_permissions(POSTGRES_BIN_PATH)
 
             read_perm = stat.S_IRGRP | stat.S_IROTH
             execute_perm = stat.S_IXGRP | stat.S_IXOTH
-            # for envs like cibuildwheel docker, where the user is has no permission otherwise
-            ensure_folder_permissions(POSTGRES_BIN_PATH, execute_perm | read_perm)
-            ensure_folder_permissions(POSTGRES_BIN_PATH.parent / 'lib', read_perm)
+            for path in POSTGRES_VERSIONS.values():
+                ensure_prefix_permissions(path)
+                # for envs like cibuildwheel docker, where the user has no permissions otherwise
+                ensure_folder_permissions(path, execute_perm | read_perm)
+                ensure_folder_permissions(path.parent / 'lib', read_perm)
 
             os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
 
@@ -119,9 +169,9 @@ class PostgresServer:
             # Since we do not know PID information of the old server, we stop all servers with the same pgdata path.
             # way to test this:
             #
-            # python -c 'import pixeltable as pxt; pxt.Client()'
+            # python -c 'import pixeltable as pxt; pxt.init()'
             # rm -rf ~/.pixeltable/
-            # python -c 'import pixeltable as pxt; pxt.Client()'
+            # python -c 'import pixeltable as pxt; pxt.init()'
             _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
             for proc in psutil.process_iter(attrs=('name', 'cmdline')):
                 if (
@@ -153,6 +203,7 @@ class PostgresServer:
                     '-D',
                     str(self.pgdata),
                 ),
+                bin_path=self.bin_path,
                 user=self.system_user,
             )
         else:
@@ -205,7 +256,14 @@ class PostgresServer:
             try:
                 pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), '-D', str(self.pgdata), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
-                pgexec('pg_ctl', pg_ctl_args, user=self.system_user, timeout=10, **subprocess_kwargs)
+                pgexec(
+                    'pg_ctl',
+                    pg_ctl_args,
+                    bin_path=self.bin_path,
+                    user=self.system_user,
+                    timeout=10,
+                    **subprocess_kwargs,
+                )
 
             except subprocess.SubprocessError:
                 _logger.error(
@@ -247,25 +305,7 @@ class PostgresServer:
                 return
 
             assert self.cleanup_mode in ('stop', 'delete')
-            if self._postmaster_info is not None:
-                assert self._postmaster_info.process is not None
-                if self._postmaster_info.process.is_running():
-                    try:
-                        pgexec('pg_ctl', ('-w', '-D', str(self.pgdata), 'stop'), user=self.system_user)
-                        stopped = True
-                    except subprocess.CalledProcessError:
-                        stopped = False
-                        pass  # somehow the server is already stopped.
-
-                    if not stopped:
-                        _logger.warning('Failed to stop server; killing it instead.')
-                        self._postmaster_info.process.terminate()
-                        try:
-                            self._postmaster_info.process.wait(2)
-                        except psutil.TimeoutExpired:
-                            pass
-                        if self._postmaster_info.process.is_running():
-                            self._postmaster_info.process.kill()
+            self._stop()
 
             if self.cleanup_mode == 'stop':
                 return
@@ -276,7 +316,7 @@ class PostgresServer:
 
     def psql(self, command: str) -> str:
         """Runs a psql command on this server. The command is passed to psql via stdin."""
-        executable = POSTGRES_BIN_PATH / 'psql'
+        executable = POSTGRES_VERSIONS[TARGET_POSTGRES_VERSION] / 'psql'
         stdout = subprocess.check_output(f'{executable} {self.get_uri()}', input=command.encode(), shell=True)
         return stdout.decode('utf-8')
 
@@ -296,7 +336,13 @@ class PostgresServer:
         self._cleanup()
 
 
-def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop') -> PostgresServer:
+def get_server(
+    pgdata: Path | str,
+    *,
+    cleanup_mode: str | None = 'stop',
+    start: bool = True,
+    postgres_version: int = TARGET_POSTGRES_VERSION,
+) -> PostgresServer:
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
@@ -315,10 +361,120 @@ def get_server(pgdata: Path | str, cleanup_mode: str | None = 'stop') -> Postgre
     if not pgdata.parent.exists():
         raise FileNotFoundError(f'Parent directory of pgdata does not exist: {pgdata.parent}')
 
-    if not pgdata.exists():
-        pgdata.mkdir(parents=False, exist_ok=False)
+    version = pgdata_version(pgdata)
+    if version is not None and version != postgres_version:
+        raise RuntimeError(
+            f'Version mismatch: expecting version {postgres_version} but found version {version}: {pgdata}'
+        )
 
     if pgdata in PostgresServer._instances:
         return PostgresServer._instances[pgdata]
 
-    return PostgresServer(pgdata, cleanup_mode=cleanup_mode)
+    pgdata.mkdir(parents=False, exist_ok=True)
+
+    server = PostgresServer(pgdata, cleanup_mode=cleanup_mode, postgres_version=postgres_version)
+    if start:
+        server.start()
+    return server
+
+
+def pgdata_version(pgdata: Path | str) -> int | None:
+    """Returns the version of postgres that initialized the given pgdata directory,
+    or None if it is not initialized."""
+    if isinstance(pgdata, str):
+        pgdata = Path(pgdata)
+    pgdata = pgdata.expanduser().resolve()
+
+    version_file = pgdata / 'PG_VERSION'
+    if not version_file.exists():
+        return None
+
+    return int(version_file.read_text().strip())
+
+
+def upgrade_db(pgdata: Path | str) -> None:
+    """Upgrades the given pgdata directory to the latest version of postgres."""
+    if isinstance(pgdata, str):
+        pgdata = Path(pgdata)
+    pgdata = pgdata.expanduser().resolve()
+
+    target_version = TARGET_POSTGRES_VERSION
+    current_version = pgdata_version(pgdata)
+    if current_version is None or current_version == target_version:
+        # Nothing to do
+        return
+
+    assert current_version in POSTGRES_VERSIONS, (
+        'Unexpectedly encountered a pgdata folder with a version of postgres that was never supported.'
+    )
+
+    _logger.info('Upgrading pgdata from version %s to %s: %s', current_version, target_version, pgdata)
+
+    old_server = get_server(pgdata, start=False, postgres_version=current_version)
+    with old_server._lock:
+        postmaster_info = PostmasterInfo.read_from_pgdata(pgdata)
+        if postmaster_info is not None and postmaster_info.is_running():
+            _logger.info('Stopping existing pgserver: %s', postmaster_info)
+            pgexec('pg_ctl', ('-D', str(pgdata), 'stop'), bin_path=old_server.bin_path, user=old_server.system_user)
+
+        # Our postgres 16 pgdata dirs don't have checksums enabled, but postgres 18 has them on by default.
+        # We need to do something here; recommended practice is to enable checksums on the old cluster
+        # before upgrading.
+        control_data = pgexec(
+            'pg_controldata', ('-D', str(pgdata)), bin_path=old_server.bin_path, user=old_server.system_user
+        )
+        match = re.search(r'Data page checksum version:\s*(\d+)', control_data)
+        if not match:
+            raise RuntimeError('Could not find checksum version in pg_controldata output')
+        checksum_version = int(match.group(1))
+        if checksum_version == 0:
+            _logger.info('Enabling checksums in existing pgdata directory.')
+            pgexec(
+                'pg_checksums',
+                ('-D', str(pgdata), '--enable'),
+                bin_path=old_server.bin_path,
+                user=old_server.system_user,
+            )
+
+    _logger.info('Initializing new pgdata directory for upgrade.')
+    tmp_cluster_dir = Path(tempfile.mkdtemp(dir=pgdata.parent, prefix='.pgdata-tmp-'))
+    tmp_server = get_server(tmp_cluster_dir, start=False)
+
+    tmp_server.ensure_pgdata_inited()
+
+    _logger.info('Running pg_upgrade.')
+    # Run the upgarde with the *new* server's `pg_upgrade` binary, pointing to the *old* server with -b
+    tmp_cwd = Path(tempfile.mkdtemp())
+    pgexec(
+        'pg_upgrade',
+        (
+            '-b',
+            str(old_server.bin_path),
+            '-d',
+            str(pgdata),
+            '-D',
+            str(tmp_cluster_dir),
+            '-U',
+            tmp_server.postgres_user,
+        ),
+        bin_path=POSTGRES_VERSIONS[TARGET_POSTGRES_VERSION],
+        user=tmp_server.system_user,
+        cwd=tmp_cwd,
+    )
+
+    _logger.info('Moving directories into place.')
+    pgdata.rename(Path(str(pgdata) + '.old'))
+    tmp_cluster_dir.rename(pgdata)
+
+    new_server = get_server(pgdata)
+    # Run update_extensions.sql
+    update_extensions_file = tmp_cwd / 'update_extensions.sql'
+    if update_extensions_file.exists():
+        _logger.info(f'Running script: {update_extensions_file}')
+        with open(update_extensions_file, encoding='utf-8') as fp:
+            sql = fp.read()
+            new_server.psql(sql)
+    else:
+        _logger.info('No update_extensions.sql file found; skipping.')
+
+    _logger.info('pgdata upgrade complete.')

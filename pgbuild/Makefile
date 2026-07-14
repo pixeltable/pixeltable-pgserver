@@ -1,18 +1,31 @@
 SHELL := /bin/bash
-INSTALL_RELPATH := ../src/pixeltable_pgserver/pginstall
+INSTALL_RELPATH := ../src/pixeltable_pgserver/$(PGSERVER_INSTALL_PACKAGE)
 INSTALL_PREFIX := $(shell pwd)/$(INSTALL_RELPATH)
 BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
-all: pgvector postgres
+all: fixup
+
+# Rewrite the absolute dylib install names Postgres bakes in to @rpath-relative form, so
+# the install tree is relocatable and PG16 + PG18 can coexist in one wheel without a
+# delocate basename collision (e.g. two libpq.5.dylib). No-op off macOS. Runs last, after
+# both postgres and pgvector have installed their libraries into $(INSTALL_PREFIX).
+.PHONY: fixup
+fixup: pgvector postgres
+	bash fixup_macos_rpaths.sh $(INSTALL_PREFIX)
 
 ### postgres
-POSTGRES_VERSION := 16.11
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
 POSTGRES_SRC := postgresql-$(POSTGRES_VERSION)
 POSTGRES_BLD := $(POSTGRES_SRC)
 
 $(POSTGRES_SRC).tar.gz:
+ifndef POSTGRES_VERSION
+	$(error POSTGRES_VERSION is undefined.)
+endif
+ifndef PGSERVER_INSTALL_PACKAGE
+	$(error PGSERVER_INSTALL_PACKAGE is undefined.)
+endif
 	curl -L -O $(POSTGRES_URL)
 
 ## extract
@@ -45,9 +58,9 @@ $(INSTALL_PREFIX)/bin/postgres: $(POSTGRES_BLD)/config.status
 postgres: $(INSTALL_PREFIX)/bin/postgres
 
 ### pgvector
-PGVECTOR_TAG := v0.8.1
+PGVECTOR_TAG := v0.8.5
 PGVECTOR_URL := https://github.com/pgvector/pgvector/archive/refs/tags/$(PGVECTOR_TAG).tar.gz
-PGVECTOR_DIR := pgvector-$(PGVECTOR_TAG)
+PGVECTOR_DIR := pgvector-$(POSTGRES_VERSION)-$(PGVECTOR_TAG)
 
 $(PGVECTOR_DIR).tar.gz:
 	curl -L -o $(PGVECTOR_DIR).tar.gz $(PGVECTOR_URL)
@@ -70,7 +83,7 @@ pgvector: postgres $(INSTALL_PREFIX)/lib/vector.so
 ### other
 .PHONY: clean clean-all
 clean:
-	rm -rf $(INSTALL_PREFIX)
+	rm -rf ../src/pixeltable_pgserver/pginstall*
 	rm -rf postgresql-*
 	rm -rf pgvector-*
 	rm -rf *.tar.gz

@@ -11,13 +11,14 @@ else
 endif
 
 build:
-	$(MAKE) -d -C pgbuild all
+	POSTGRES_VERSION=16.14 PGSERVER_INSTALL_PACKAGE=pginstall $(MAKE) -d -C pgbuild all
+	POSTGRES_VERSION=18.4 PGSERVER_INSTALL_PACKAGE=pginstall18 $(MAKE) -d -C pgbuild all
 
 wheel: build
 	python setup.py bdist_wheel
 
 install-wheel: wheel
-	python -m pip install dist/*.whl
+	python -m pip install dist/*.whl --force-reinstall
 
 install-dev: check-conda build
 	python -m pip install -e .[dev,test]
