@@ -94,30 +94,35 @@ class PostgresServer:
 
     def stop(self) -> None:
         with self._lock:
-            if self._postmaster_info is not None:
-                assert self._postmaster_info.process is not None
-                if self._postmaster_info.process.is_running():
-                    try:
-                        pgexec(
-                            'pg_ctl',
-                            ('-w', '-D', str(self.pgdata), 'stop'),
-                            bin_path=self.bin_path,
-                            user=self.system_user,
-                        )
-                        stopped = True
-                    except subprocess.CalledProcessError:
-                        stopped = False
-                        pass  # somehow the server is already stopped.
+            self._stop()
 
-                    if not stopped:
-                        _logger.warning('Failed to stop server; killing it instead.')
-                        self._postmaster_info.process.terminate()
-                        try:
-                            self._postmaster_info.process.wait(2)
-                        except psutil.TimeoutExpired:
-                            pass
-                        if self._postmaster_info.process.is_running():
-                            self._postmaster_info.process.kill()
+    def _stop(self) -> None:
+        if self._postmaster_info is None:
+            return
+
+        assert self._postmaster_info.process is not None
+        if not self._postmaster_info.process.is_running():
+            return
+
+        try:
+            pgexec(
+                'pg_ctl',
+                ('-w', '-D', str(self.pgdata), 'stop'),
+                bin_path=self.bin_path,
+                user=self.system_user,
+            )
+            return
+        except subprocess.CalledProcessError:
+            pass
+
+        _logger.warning('Failed to stop server; killing it instead.')
+        self._postmaster_info.process.terminate()
+        try:
+            self._postmaster_info.process.wait(2)
+        except psutil.TimeoutExpired:
+            pass
+        if self._postmaster_info.process.is_running():
+            self._postmaster_info.process.kill()
 
     def get_postmaster_info(self) -> PostmasterInfo:
         assert self._postmaster_info is not None
@@ -300,7 +305,7 @@ class PostgresServer:
                 return
 
             assert self.cleanup_mode in ('stop', 'delete')
-            self.stop()
+            self._stop()
 
             if self.cleanup_mode == 'stop':
                 return
