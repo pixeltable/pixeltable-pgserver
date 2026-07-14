@@ -19,8 +19,8 @@ from typing_extensions import Self
 
 from .pgexec import pgexec
 from .utils import (
-    LATEST_POSTGRES_VERSION,
     POSTGRES_VERSIONS,
+    TARGET_POSTGRES_VERSION,
     DiskList,
     PostmasterInfo,
     find_suitable_port,
@@ -52,7 +52,9 @@ class PostgresServer:
 
     bin_path: Path
 
-    def __init__(self, pgdata: Path, *, cleanup_mode: str | None = 'stop', postgres_version: int = 18):
+    def __init__(
+        self, pgdata: Path, *, cleanup_mode: str | None = 'stop', postgres_version: int = TARGET_POSTGRES_VERSION
+    ) -> None:
         """Initializes the postgresql server instance.
         Constructor is intended to be called directly, use get_server() instead.
         """
@@ -89,6 +91,33 @@ class PostgresServer:
             self.ensure_pgdata_inited()
             self.ensure_postgres_running()
             self.global_process_id_list.get_and_add(os.getpid())
+
+    def stop(self) -> None:
+        with self._lock:
+            if self._postmaster_info is not None:
+                assert self._postmaster_info.process is not None
+                if self._postmaster_info.process.is_running():
+                    try:
+                        pgexec(
+                            'pg_ctl',
+                            ('-w', '-D', str(self.pgdata), 'stop'),
+                            bin_path=self.bin_path,
+                            user=self.system_user,
+                        )
+                        stopped = True
+                    except subprocess.CalledProcessError:
+                        stopped = False
+                        pass  # somehow the server is already stopped.
+
+                    if not stopped:
+                        _logger.warning('Failed to stop server; killing it instead.')
+                        self._postmaster_info.process.terminate()
+                        try:
+                            self._postmaster_info.process.wait(2)
+                        except psutil.TimeoutExpired:
+                            pass
+                        if self._postmaster_info.process.is_running():
+                            self._postmaster_info.process.kill()
 
     def get_postmaster_info(self) -> PostmasterInfo:
         assert self._postmaster_info is not None
@@ -271,30 +300,7 @@ class PostgresServer:
                 return
 
             assert self.cleanup_mode in ('stop', 'delete')
-            if self._postmaster_info is not None:
-                assert self._postmaster_info.process is not None
-                if self._postmaster_info.process.is_running():
-                    try:
-                        pgexec(
-                            'pg_ctl',
-                            ('-w', '-D', str(self.pgdata), 'stop'),
-                            bin_path=self.bin_path,
-                            user=self.system_user,
-                        )
-                        stopped = True
-                    except subprocess.CalledProcessError:
-                        stopped = False
-                        pass  # somehow the server is already stopped.
-
-                    if not stopped:
-                        _logger.warning('Failed to stop server; killing it instead.')
-                        self._postmaster_info.process.terminate()
-                        try:
-                            self._postmaster_info.process.wait(2)
-                        except psutil.TimeoutExpired:
-                            pass
-                        if self._postmaster_info.process.is_running():
-                            self._postmaster_info.process.kill()
+            self.stop()
 
             if self.cleanup_mode == 'stop':
                 return
@@ -305,7 +311,7 @@ class PostgresServer:
 
     def psql(self, command: str) -> str:
         """Runs a psql command on this server. The command is passed to psql via stdin."""
-        executable = POSTGRES_VERSIONS[LATEST_POSTGRES_VERSION] / 'psql'
+        executable = POSTGRES_VERSIONS[TARGET_POSTGRES_VERSION] / 'psql'
         stdout = subprocess.check_output(f'{executable} {self.get_uri()}', input=command.encode(), shell=True)
         return stdout.decode('utf-8')
 
@@ -326,7 +332,11 @@ class PostgresServer:
 
 
 def get_server(
-    pgdata: Path | str, *, cleanup_mode: str | None = 'stop', start: bool = True, postgres_version: int = 18
+    pgdata: Path | str,
+    *,
+    cleanup_mode: str | None = 'stop',
+    start: bool = True,
+    postgres_version: int = TARGET_POSTGRES_VERSION,
 ) -> PostgresServer:
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
@@ -378,7 +388,7 @@ def upgrade_db(pgdata: Path | str) -> None:
         pgdata = Path(pgdata)
     pgdata = pgdata.expanduser().resolve()
 
-    target_version = LATEST_POSTGRES_VERSION
+    target_version = TARGET_POSTGRES_VERSION
     current_version = pgdata_version(pgdata)
     if current_version is None or current_version == target_version:
         # Nothing to do
@@ -437,7 +447,7 @@ def upgrade_db(pgdata: Path | str) -> None:
             '-U',
             tmp_server.postgres_user,
         ),
-        bin_path=POSTGRES_VERSIONS[LATEST_POSTGRES_VERSION],
+        bin_path=POSTGRES_VERSIONS[TARGET_POSTGRES_VERSION],
         user=tmp_server.system_user,
         cwd=tmp_cwd,
     )
@@ -449,9 +459,12 @@ def upgrade_db(pgdata: Path | str) -> None:
     new_server = get_server(pgdata)
     # Run update_extensions.sql
     update_extensions_file = tmp_cwd / 'update_extensions.sql'
-    _logger.info(f'Running script: {update_extensions_file}')
-    with open(update_extensions_file, encoding='utf-8') as fp:
-        sql = fp.read()
-        new_server.psql(sql)
+    if update_extensions_file.exists():
+        _logger.info(f'Running script: {update_extensions_file}')
+        with open(update_extensions_file, encoding='utf-8') as fp:
+            sql = fp.read()
+            new_server.psql(sql)
+    else:
+        _logger.info('No update_extensions.sql file found; skipping.')
 
     _logger.info('pgdata upgrade complete.')
