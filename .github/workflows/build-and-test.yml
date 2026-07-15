@@ -27,7 +27,7 @@ jobs:
           - os: ubuntu-24.04-arm
             cibw-archs: aarch64
             deployment-target: ''
-          - os: windows-2022
+          - os: windows-2025
             cibw-archs: 'AMD64 ARM64'
             deployment-target: ''
     steps:

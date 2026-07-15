@@ -290,6 +290,30 @@ def test_pgvector(tmp_postgres: PostgresServer) -> None:
     assert ret.strip() == 'CREATE EXTENSION'
 
 
+def test_new_cluster_uses_builtin_locale(tmp_postgres: PostgresServer) -> None:
+    """A freshly initialized cluster must use the builtin C.UTF-8 locale provider.
+
+    With the libc provider (the old, unpinned default), the database's default collation is
+    built from datcollate/datctype, and on Windows a database whose collate != ctype is
+    rejected at connect time ("collations with different collate and ctype values are not
+    supported on this platform"). That divergence only occurs under certain host locales
+    (e.g. a conda UTF-8 environment), so it is invisible to a functional connect test running
+    in CI's default locale -- which is why the pgserver suite passed while a downstream
+    consumer failed. Asserting the provider is deterministic and host-independent.
+
+    Note: datcollate/datctype still reflect the host libc locale even under the builtin
+    provider; it is datlocprovider = 'b' that makes the *default collation* independent of
+    libc and thus avoids the Windows collate/ctype restriction.
+    """
+    out = tmp_postgres.psql(
+        "SELECT 'provider=' || datlocprovider::text || ' locale=' || coalesce(datlocale, 'NULL') "
+        "FROM pg_database WHERE datname = 'postgres';"
+    )
+    # 'b' = builtin; 'c' (libc) means the pin was lost. Without the fix this reads 'provider=c locale=NULL'.
+    assert 'provider=b' in out, out
+    assert 'locale=C.UTF-8' in out, out
+
+
 def test_start_failure_log(caplog: pytest.LogCaptureFixture) -> None:
     """Test server log contents are shown in python log when failures"""
     with tempfile.TemporaryDirectory() as tmpdir:

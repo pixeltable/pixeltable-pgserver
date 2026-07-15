@@ -8,6 +8,6 @@ case "$OSTYPE" in
     #     echo "Tests disabled on the manylinux docker container for now"
     #     ;;
     *)
-        pytest -s -v --log-cli-level=INFO $PROJECT/tests
+        pytest -v "$PROJECT/tests"
         ;;
 esac
