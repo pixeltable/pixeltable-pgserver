@@ -36,6 +36,13 @@ _logger = logging.getLogger('pixeltable_pgserver')
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 CREATE_NO_WINDOW = 0x08000000
 
+# initdb locale for brand-new clusters. The builtin C.UTF-8 provider (PG17+) defines collate
+# and ctype itself, so they are identical and platform-independent. This avoids Windows'
+# refusal of databases whose collate != ctype, which PG18's libc locale detection can produce
+# when no locale is specified (PG16 happened to derive matching values). New clusters always
+# use TARGET_POSTGRES_VERSION (>=18), so the builtin provider is guaranteed available.
+_NEW_CLUSTER_INITDB_LOCALE_ARGS: tuple[str, ...] = ('--locale-provider=builtin', '--builtin-locale=C.UTF-8')
+
 
 class PostgresServer:
     """Provides a common interface for interacting with a server."""
@@ -139,7 +146,7 @@ class PostgresServer:
         """Returns a connection string for the postgresql server."""
         return self.get_postmaster_info().get_uri(database=database, driver=driver)
 
-    def ensure_pgdata_inited(self) -> None:
+    def ensure_pgdata_inited(self, *, initdb_locale_args: tuple[str, ...] = _NEW_CLUSTER_INITDB_LOCALE_ARGS) -> None:
         """Initializes the pgdata directory if it is not already initialized."""
         if platform.system() != 'Windows' and os.geteuid() == 0:
             import pwd
@@ -198,6 +205,7 @@ class PostgresServer:
                     '--auth=trust',
                     '--auth-local=trust',
                     '--encoding=utf8',
+                    *initdb_locale_args,
                     '-U',
                     self.postgres_user,
                     '-D',
@@ -392,6 +400,39 @@ def pgdata_version(pgdata: Path | str) -> int | None:
     return int(version_file.read_text().strip())
 
 
+def _read_template0_locale(pgdata: Path, *, bin_path: Path, user: str | None) -> dict[str, str]:
+    """Reads template0's locale settings from a *stopped* cluster via single-user mode.
+
+    pg_upgrade requires the new cluster to be initialized with the same locale as the old one,
+    but pg_controldata does not expose locale and the values live in the pg_database catalog. We
+    therefore query the catalog offline with `postgres --single`, which needs neither a running
+    server, a TCP port, nor the process lock (avoiding the non-reentrant `_lock`). Returns a dict
+    with keys datcollate, datctype, encoding, datlocprovider.
+    """
+    sql = (
+        'SELECT datcollate, datctype, pg_encoding_to_char(encoding) AS encoding, datlocprovider '
+        "FROM pg_database WHERE datname = 'template0';"
+    )
+    output = pgexec('postgres', ('--single', '-D', str(pgdata), 'postgres'), bin_path=bin_path, user=user, input=sql)
+    fields = dict(re.findall(r'\b(\w+) = "([^"]*)"', output))
+    missing = {'datcollate', 'datctype', 'encoding', 'datlocprovider'} - fields.keys()
+    if missing:
+        raise RuntimeError(f'Could not read locale of {pgdata} (missing {sorted(missing)}). Backend output:\n{output}')
+    return fields
+
+
+def _matching_initdb_locale_args(locale: dict[str, str]) -> tuple[str, ...]:
+    """Builds initdb locale args that reproduce `locale` (read from an old cluster) so pg_upgrade
+    accepts the new cluster. Existing pgserver clusters use the libc provider; new ones use builtin.
+    ICU is never produced by pgserver and is unsupported here."""
+    provider = locale['datlocprovider']
+    if provider == 'c':  # libc
+        return ('--locale-provider=libc', f'--lc-collate={locale["datcollate"]}', f'--lc-ctype={locale["datctype"]}')
+    if provider == 'b':  # builtin: a single locale name, stored identically in datcollate/datctype
+        return ('--locale-provider=builtin', f'--builtin-locale={locale["datcollate"]}')
+    raise RuntimeError(f'Cannot replicate locale provider {provider!r} for upgrade (supported: libc, builtin): {locale}')
+
+
 def upgrade_db(pgdata: Path | str) -> None:
     """Upgrades the given pgdata directory to the latest version of postgres."""
     if isinstance(pgdata, str):
@@ -417,6 +458,12 @@ def upgrade_db(pgdata: Path | str) -> None:
             _logger.info('Stopping existing pgserver: %s', postmaster_info)
             pgexec('pg_ctl', ('-D', str(pgdata), 'stop'), bin_path=old_server.bin_path, user=old_server.system_user)
 
+        # The new (target) cluster must be initialized with the same locale as the old cluster, or
+        # pg_upgrade will reject the mismatch. The old cluster was created without a pinned locale
+        # (it inherited the host OS locale), so read its actual settings from the now-stopped cluster.
+        old_locale = _read_template0_locale(pgdata, bin_path=old_server.bin_path, user=old_server.system_user)
+        assert old_locale['encoding'] == 'UTF8', f'Unexpected non-UTF8 encoding in existing pgdata: {old_locale}'
+
         # Our postgres 16 pgdata dirs don't have checksums enabled, but postgres 18 has them on by default.
         # We need to do something here; recommended practice is to enable checksums on the old cluster
         # before upgrading.
@@ -440,7 +487,9 @@ def upgrade_db(pgdata: Path | str) -> None:
     tmp_cluster_dir = Path(tempfile.mkdtemp(dir=pgdata.parent, prefix='.pgdata-tmp-'))
     tmp_server = get_server(tmp_cluster_dir, start=False)
 
-    tmp_server.ensure_pgdata_inited()
+    # Reproduce the old cluster's locale so pg_upgrade accepts the new cluster (rather than the
+    # builtin C.UTF-8 default used for brand-new clusters).
+    tmp_server.ensure_pgdata_inited(initdb_locale_args=_matching_initdb_locale_args(old_locale))
 
     _logger.info('Running pg_upgrade.')
     # Run the upgarde with the *new* server's `pg_upgrade` binary, pointing to the *old* server with -b
