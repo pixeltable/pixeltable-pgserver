@@ -19,6 +19,7 @@ from typing_extensions import Self
 
 from .pgexec import pgexec
 from .utils import (
+    POSTGRES_PROCESS_NAMES,
     POSTGRES_VERSIONS,
     TARGET_POSTGRES_VERSION,
     DiskList,
@@ -158,11 +159,7 @@ class PostgresServer:
                 ensure_folder_permissions(path, execute_perm | read_perm)
                 ensure_folder_permissions(path.parent / 'lib', read_perm)
 
-            pw = pwd.getpwnam(self.system_user)
-            os.chown(self.pgdata, pw.pw_uid, pw.pw_gid)
-            # pg_ctl runs as the system user and appends to the log, in a directory that user may not own
-            self.log.touch(exist_ok=True)
-            os.chown(self.log, pw.pw_uid, pw.pw_gid)
+            os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
 
         if not (self.pgdata / 'PG_VERSION').exists():  # making a new PGDATA
             # First ensure there are no left-over servers on a previous version of the same pgdata path,
@@ -181,7 +178,7 @@ class PostgresServer:
             _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
             for proc in psutil.process_iter(attrs=('name', 'cmdline')):
                 if (
-                    proc.info['name'] == 'postgres'
+                    proc.info['name'] in POSTGRES_PROCESS_NAMES
                     and proc.info['cmdline'] is not None
                     and str(self.pgdata) in proc.info['cmdline']
                 ):
@@ -215,6 +212,22 @@ class PostgresServer:
         else:
             _logger.info('PG_VERSION file found, skipping initdb')
 
+    def _create_log(self) -> None:
+        """Creates the server log, if needed, so that only the server's user can read it."""
+        if platform.system() == 'Windows':
+            return
+        # Unlike pgdata, the log's directory may be shared, so never follow a symlink planted at its path
+        fd = os.open(self.log, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+            if self.system_user is not None:
+                import pwd
+
+                # pg_ctl runs as the system user, which may not be allowed to create files in the log's directory
+                os.fchown(fd, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
+        finally:
+            os.close(fd)
+
     def ensure_postgres_running(self) -> None:
         """pre condition: pgdata is initialized, being run with lock.
         post condition: self._postmaster_info is set.
@@ -223,14 +236,13 @@ class PostgresServer:
         postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
         if postmaster_info is not None and postmaster_info.is_running():
             _logger.info(f'a postgres server is already running: {postmaster_info=} {postmaster_info.process=}')
-            self._postmaster_info = postmaster_info
         else:
-            if postmaster_info is not None and not postmaster_info.is_running():
+            if postmaster_info is not None:
                 _logger.info(f'found a postmaster.pid file, but the server is not running: {postmaster_info=}')
                 # On Linux and macOS, postgres refuses to start while the pid in a stale postmaster.pid belongs to a
-                # live process, even an unrelated one
+                # live process owned by the same user, and on every OS it refuses an empty or garbled postmaster.pid
                 (self.pgdata / 'postmaster.pid').unlink(missing_ok=True)
-            if postmaster_info is None:
+            else:
                 _logger.info(f'no postmaster.pid file found in {self.pgdata}')
 
             postgres_args: str
@@ -262,6 +274,7 @@ class PostgresServer:
                     'creationflags': CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                 }
 
+            self._create_log()
             try:
                 pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), '-D', str(self.pgdata), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
@@ -270,31 +283,33 @@ class PostgresServer:
                     pg_ctl_args,
                     bin_path=self.bin_path,
                     user=self.system_user,
-                    # pg_ctl -w's own default wait; crash recovery can take well over 10s
                     timeout=60,
                     **subprocess_kwargs,
                 )
 
             except subprocess.SubprocessError:
+                log_text = self.log.read_text() if self.log.exists() else '(no log file)'
                 _logger.error(
                     f'Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) '
-                    f'below:\n{self.log.read_text()}'
+                    f'below:\n{log_text}'
                 )
                 raise
 
-            while True:
-                # in Windows, when there is a postmaster.pid,  init_ctl seems to return
-                # but the file is not immediately updated, here we wait until the file shows
-                # a new running server. see test_stale_postmaster
-                _logger.info('Waiting for postmaster info to show a running process.')
-                pinfo = PostmasterInfo.read_from_pgdata(self.pgdata)
-                _logger.info(f'Running; checking if ready {pinfo=}')
-                if pinfo is not None and pinfo.is_running() and pinfo.status == 'ready':
-                    self._postmaster_info = pinfo
-                    break
+        while True:
+            # in Windows, when there is a postmaster.pid,  init_ctl seems to return
+            # but the file is not immediately updated, here we wait until the file shows
+            # a new running server. see test_stale_postmaster
+            # A server that was already running may still be in crash recovery, for instance after an earlier start
+            # timed out, so wait for it to be ready as well.
+            _logger.info('Waiting for postmaster info to show a running process.')
+            pinfo = PostmasterInfo.read_from_pgdata(self.pgdata)
+            _logger.info(f'Running; checking if ready {pinfo=}')
+            if pinfo is not None and pinfo.is_running() and pinfo.status == 'ready':
+                self._postmaster_info = pinfo
+                break
 
-                _logger.info('Not ready yet; waiting a bit longer.')
-                time.sleep(1.0)
+            _logger.info('Not ready yet; waiting a bit longer.')
+            time.sleep(1.0)
 
         _logger.info(f'Now asserting server is running {self._postmaster_info=}')
         assert self._postmaster_info is not None
@@ -357,7 +372,8 @@ def get_server(
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
-        parent must exists and be a valid directory.
+        parent must exists and be a valid directory. The server log is written beside it, as <pgdata>.log, so
+        the parent must also be writable by the server's user.
         cleanup_mode: If 'stop', the server will be stopped when the last handle is closed (default)
                         If 'delete', the server will be stopped and the pgdata directory will be deleted.
                         If None, the server will not be stopped or deleted.

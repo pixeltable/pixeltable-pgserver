@@ -29,6 +29,17 @@ if TARGET_POSTGRES_VERSION not in POSTGRES_VERSIONS:
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
+POSTGRES_PROCESS_NAMES = ('postgres', 'postgres.exe')
+
+
+def _data_dir_arg(cmdline: list[str]) -> Path | None:
+    """Returns the data directory that a postgres command line passes with -D, if any."""
+    for i, arg in enumerate(cmdline[:-1]):
+        if arg == '-D':
+            # A Path, so that separators and (on Windows) case compare equal to the path in postmaster.pid
+            return Path(cmdline[i + 1])
+    return None
+
 
 class PostmasterInfo:
     """Struct with contents of the PGDATA/postmaster.pid file, contains information about the running server.
@@ -46,9 +57,9 @@ class PostmasterInfo:
         ```
     """
 
-    pid: int
+    pid: int | None
     pgdata: Path
-    start_time: datetime
+    start_time: datetime | None
     socket_dir: Path | None
     hostname: str | None
     port: int | None
@@ -58,14 +69,15 @@ class PostmasterInfo:
 
     def __init__(self, lines: list[str]) -> None:
         line_vars = ('pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status')
-        assert len(lines) == len(line_vars), f'line_vars: {line_vars=}\nlines: {lines=}'
+        # Postgres writes postmaster.pid a few lines at a time during startup, so a crash can leave it truncated
+        lines = [*lines, *([''] * (len(line_vars) - len(lines)))]
         clean_lines = (line.strip() for line in lines)
 
         raw: dict[str, str] = dict(zip(line_vars, clean_lines))
 
-        self.pid = int(raw['pid'])
+        self.pid = int(raw['pid']) if raw['pid'].isdigit() else None
         self.pgdata = Path(raw['pgdata'])
-        self.start_time = datetime.fromtimestamp(int(raw['start_time']))
+        self.start_time = datetime.fromtimestamp(int(raw['start_time'])) if raw['start_time'].isdigit() else None
 
         if raw['socket_dir']:
             self.socket_dir = Path(raw['socket_dir'])
@@ -77,7 +89,7 @@ class PostmasterInfo:
         else:
             self.hostname = None
 
-        if raw['port']:
+        if raw['port'].isdigit():
             self.port = int(raw['port'])
         else:
             self.port = None
@@ -94,10 +106,12 @@ class PostmasterInfo:
             return
         try:
             process = psutil.Process(self.pid)
-            # After a crash, the pid in a stale postmaster.pid can belong to an unrelated process: Windows reuses
-            # pids quickly, and pids start over in a restarted container. Compare the process name rather than its
-            # start time, which psutil derives on Linux from a boot time that shifts when the clock is stepped.
-            if process.name().lower() in ('postgres', 'postgres.exe'):
+            # After a crash, the pid in a stale postmaster.pid can belong to another process: Windows reuses pids
+            # quickly, and pids start over in a restarted container. Our postmaster is a postgres process started with
+            # -D <pgdata>, an argument that it keeps on its command line (its children replace theirs). This is more
+            # reliable than the start time, which psutil derives on Linux from a boot time that shifts when the clock
+            # is stepped. A process we may not inspect is not ours; postgres also treats it as stale.
+            if process.name().lower() in POSTGRES_PROCESS_NAMES and _data_dir_arg(process.cmdline()) == self.pgdata:
                 self.process = process
         except psutil.Error:
             pass

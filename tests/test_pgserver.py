@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+from contextlib import suppress
 from multiprocessing import queues
 from pathlib import Path
 from typing import Iterator
@@ -133,6 +134,8 @@ def test_get_server() -> None:
             # check case when initializing the pgdata dir
             with get_server(tmpdir) as pg:
                 pid = _check_server(pg)
+                assert pg.log.parent == pg.pgdata.parent
+                assert pg.log.exists()
 
             assert not process_is_running(pid)
             assert pg.pgdata.exists()
@@ -280,6 +283,59 @@ def test_stale_postmaster_reused_pid() -> None:
             _kill_server(pid2)
 
 
+def test_stale_postmaster_pid_of_other_server() -> None:
+    """The pid in a stale postmaster.pid can also belong to another cluster's postgres, which must be left alone."""
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as other_tmpdir:
+        pid = None
+        pid2 = None
+        other_pid = None
+        try:
+            with get_server(other_tmpdir, cleanup_mode=None) as other:
+                other_pid = _check_server(other)
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = str(other_pid)
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+            assert process_is_running(other_pid)
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+            _kill_server(other_pid)
+
+
+@pytest.mark.parametrize('num_lines', [0, 3])
+def test_truncated_postmaster_pid(num_lines: int) -> None:
+    """Postgres writes postmaster.pid a few lines at a time during startup, so a crash during startup can leave it
+    empty or truncated. The server must still start.
+    """
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        try:
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            postmaster_pid.write_text(''.join(f'{line}\n' for line in lines[:num_lines]))
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
 def test_restart_after_crash() -> None:
     """Kills the server without warning, as a crash or a container teardown does. The next start runs crash recovery,
     which must finish in time; on Windows it used to stall on the server log while that lived inside pgdata.
@@ -294,7 +350,9 @@ def test_restart_after_crash() -> None:
             postmaster = psutil.Process(pid)
             procs = [postmaster, *postmaster.children(recursive=True)]
             for proc in procs:
-                proc.kill()
+                # once the postmaster is gone, its children may exit before they are killed
+                with suppress(psutil.NoSuchProcess):
+                    proc.kill()
             psutil.wait_procs(procs, timeout=30)
 
             with get_server(tmpdir) as pg:
