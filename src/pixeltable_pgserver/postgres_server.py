@@ -65,7 +65,9 @@ class PostgresServer:
             raise ValueError(f'Unsupported postgres version: {postgres_version}')
 
         self.pgdata = pgdata
-        self.log = self.pgdata / 'log'
+        # The server log lives beside pgdata, not in it: crash recovery fsyncs every file in pgdata, and on Windows it
+        # cannot open a log file that the server's own output redirect holds open
+        self.log = pgdata.with_name(f'{pgdata.name}.log')
 
         # postgres user name, NB not the same as system user name
         self.system_user = None
@@ -156,7 +158,11 @@ class PostgresServer:
                 ensure_folder_permissions(path, execute_perm | read_perm)
                 ensure_folder_permissions(path.parent / 'lib', read_perm)
 
-            os.chown(self.pgdata, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
+            pw = pwd.getpwnam(self.system_user)
+            os.chown(self.pgdata, pw.pw_uid, pw.pw_gid)
+            # pg_ctl runs as the system user and appends to the log, in a directory that user may not own
+            self.log.touch(exist_ok=True)
+            os.chown(self.log, pw.pw_uid, pw.pw_gid)
 
         if not (self.pgdata / 'PG_VERSION').exists():  # making a new PGDATA
             # First ensure there are no left-over servers on a previous version of the same pgdata path,
@@ -221,6 +227,9 @@ class PostgresServer:
         else:
             if postmaster_info is not None and not postmaster_info.is_running():
                 _logger.info(f'found a postmaster.pid file, but the server is not running: {postmaster_info=}')
+                # On Linux and macOS, postgres refuses to start while the pid in a stale postmaster.pid belongs to a
+                # live process, even an unrelated one
+                (self.pgdata / 'postmaster.pid').unlink(missing_ok=True)
             if postmaster_info is None:
                 _logger.info(f'no postmaster.pid file found in {self.pgdata}')
 
@@ -261,7 +270,8 @@ class PostgresServer:
                     pg_ctl_args,
                     bin_path=self.bin_path,
                     user=self.system_user,
-                    timeout=10,
+                    # pg_ctl -w's own default wait; crash recovery can take well over 10s
+                    timeout=60,
                     **subprocess_kwargs,
                 )
 
@@ -312,6 +322,7 @@ class PostgresServer:
 
             assert self.cleanup_mode == 'delete'
             shutil.rmtree(str(self.pgdata))
+            self.log.unlink(missing_ok=True)
             atexit.unregister(self._cleanup)
 
     def psql(self, command: str) -> str:

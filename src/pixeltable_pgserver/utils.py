@@ -93,11 +93,14 @@ class PostmasterInfo:
         if self.pid is None:
             return
         try:
-            self.process = psutil.Process(self.pid)
-        except psutil.NoSuchProcess:
+            process = psutil.Process(self.pid)
+            # After a crash, the pid in a stale postmaster.pid can belong to an unrelated process: Windows reuses
+            # pids quickly, and pids start over in a restarted container. Compare the process name rather than its
+            # start time, which psutil derives on Linux from a boot time that shifts when the clock is stepped.
+            if process.name().lower() in ('postgres', 'postgres.exe'):
+                self.process = process
+        except psutil.Error:
             pass
-        # exact_create_time = datetime.datetime.fromtimestamp(process.create_time())
-        # if abs(self.start_time - exact_create_time) <= datetime.timedelta(seconds=1):
 
     def is_running(self) -> bool:
         return self.process is not None and self.process.is_running()

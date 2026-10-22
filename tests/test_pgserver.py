@@ -5,6 +5,7 @@ import platform
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 from multiprocessing import queues
 from pathlib import Path
@@ -252,6 +253,57 @@ def test_stale_postmaster() -> None:
             _kill_server(pid2)
 
 
+def test_stale_postmaster_reused_pid() -> None:
+    """After a crash, the pid in a stale postmaster.pid can belong to an unrelated live process: Windows reuses pids
+    quickly, and pids start over in a restarted container. The server must still start.
+    """
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        unrelated = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(300)'])
+        try:
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = str(unrelated.pid)
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            unrelated.kill()
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
+def test_restart_after_crash() -> None:
+    """Kills the server without warning, as a crash or a container teardown does. The next start runs crash recovery,
+    which must finish in time; on Windows it used to stall on the server log while that lived inside pgdata.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+
+            postmaster = psutil.Process(pid)
+            procs = [postmaster, *postmaster.children(recursive=True)]
+            for proc in procs:
+                proc.kill()
+            psutil.wait_procs(procs, timeout=30)
+
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
 def test_cleanup_delete() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -261,6 +313,7 @@ def test_cleanup_delete() -> None:
 
             assert not process_is_running(pid)
             assert not pg.pgdata.exists()
+            assert not pg.log.exists()
         finally:
             _kill_server(pid)
 
