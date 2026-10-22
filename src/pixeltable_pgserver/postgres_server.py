@@ -216,8 +216,14 @@ class PostgresServer:
         """Creates the server log, if needed, so that only the server's user can read it."""
         if platform.system() == 'Windows':
             return
-        # Unlike pgdata, the log's directory may be shared, so never follow a symlink planted at its path
-        fd = os.open(self.log, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        # Unlike pgdata, the log's directory may be shared, so never follow a symlink planted at its path. Open an
+        # existing log without O_CREAT: as root, the log belongs to the system user, and Linux refuses O_CREAT on
+        # another user's file in a sticky directory such as /tmp (fs.protected_regular), even for root.
+        flags = os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW
+        try:
+            fd = os.open(self.log, flags)
+        except FileNotFoundError:
+            fd = os.open(self.log, flags | os.O_CREAT | os.O_EXCL, 0o600)
         try:
             os.fchmod(fd, 0o600)
             if self.system_user is not None:
