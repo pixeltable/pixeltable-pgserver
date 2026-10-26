@@ -3,12 +3,14 @@ import platform
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Sequence
+from typing import IO, Any, Sequence
 
 _logger = logging.getLogger('pixeltable_pgserver')
 
 
-def pgexec(command: str, args: Sequence[str], bin_path: Path, **subprocess_kwargs: Any) -> str:
+def pgexec(
+    command: str, args: Sequence[str], bin_path: Path, stdout_file: IO[Any] | None = None, **subprocess_kwargs: Any
+) -> str:
     """
     Run a postgres command with the given command line arguments.
     Args:
@@ -16,6 +18,7 @@ def pgexec(command: str, args: Sequence[str], bin_path: Path, **subprocess_kwarg
             a list of options as would be passed to `subprocess.run`
         pgdata: The path to the data directory to use for the command.
             If the command does not need a data directory, this should be None.
+        stdout_file: A file to receive the command's stdout, which then is not returned.
         kwargs: Additional keyword arguments to pass to `subprocess.run`, eg user, timeout.
 
     Returns:
@@ -36,7 +39,9 @@ def pgexec(command: str, args: Sequence[str], bin_path: Path, **subprocess_kwarg
             # capture_output=True, as well as using stdout=subprocess.PIPE and stderr=subprocess.PIPE
             # can cause this call to hang, even with a time-out depending on the command, (pg_ctl)
             # so we use two temporary files instead
-            result = subprocess.run(cmdline, check=True, stdout=stdout, stderr=stderr, text=True, **subprocess_kwargs)
+            result = subprocess.run(
+                cmdline, check=True, stdout=stdout_file or stdout, stderr=stderr, text=True, **subprocess_kwargs
+            )
             stdout.seek(0)
             stderr.seek(0)
             output = stdout.read()

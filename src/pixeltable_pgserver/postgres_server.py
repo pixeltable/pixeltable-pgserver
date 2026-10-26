@@ -69,9 +69,7 @@ class PostgresServer:
             raise ValueError(f'Unsupported postgres version: {postgres_version}')
 
         self.pgdata = pgdata
-        # The server log lives beside pgdata, not in it: crash recovery fsyncs every file in pgdata, and on Windows it
-        # cannot open a log file that the server's own output redirect holds open
-        self.log = pgdata.with_name(f'{pgdata.name}.log')
+        self.log = self.pgdata / 'log'
 
         # postgres user name, NB not the same as system user name
         self.system_user = None
@@ -216,28 +214,6 @@ class PostgresServer:
         else:
             _logger.info('PG_VERSION file found, skipping initdb')
 
-    def _create_log(self) -> None:
-        """Creates the server log, if needed, so that only the server's user can read it."""
-        if platform.system() == 'Windows':
-            return
-        # Unlike pgdata, the log's directory may be shared, so never follow a symlink planted at its path. Open an
-        # existing log without O_CREAT: as root, the log belongs to the system user, and Linux refuses O_CREAT on
-        # another user's file in a sticky directory such as /tmp (fs.protected_regular), even for root.
-        flags = os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW
-        try:
-            fd = os.open(self.log, flags)
-        except FileNotFoundError:
-            fd = os.open(self.log, flags | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            os.fchmod(fd, 0o600)
-            if self.system_user is not None:
-                import pwd
-
-                # pg_ctl runs as the system user, which may not be allowed to create files in the log's directory
-                os.fchown(fd, pwd.getpwnam(self.system_user).pw_uid, pwd.getpwnam(self.system_user).pw_gid)
-        finally:
-            os.close(fd)
-
     def ensure_postgres_running(self) -> None:
         """pre condition: pgdata is initialized, being run with lock.
         post condition: self._postmaster_info is set.
@@ -288,26 +264,33 @@ class PostgresServer:
                     'creationflags': CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                 }
 
-            self._create_log()
+            # On Windows, pg_ctl -l has cmd.exe open the log without sharing write access, so crash recovery, which
+            # fsyncs every file in pgdata, cannot open it and retries for 30s. Instead the server gets the log as
+            # pg_ctl's stdout, opened here with sharing, and -s keeps pg_ctl's own progress messages out of it.
+            log_file = self.log.open('ab') if platform.system() == 'Windows' else None
             try:
-                pg_ctl_args = ('-w', '-o', postgres_args, '-l', str(self.log), '-D', str(self.pgdata), 'start')
+                log_args = ('-l', str(self.log)) if log_file is None else ('-s',)
+                pg_ctl_args = ('-w', '-o', postgres_args, *log_args, '-D', str(self.pgdata), 'start')
                 _logger.info(f'running pg_ctl... {pg_ctl_args=}')
                 pgexec(
                     'pg_ctl',
                     pg_ctl_args,
                     bin_path=self.bin_path,
+                    stdout_file=log_file,
                     user=self.system_user,
                     timeout=_START_TIMEOUT_SECS,
                     **subprocess_kwargs,
                 )
 
             except subprocess.SubprocessError:
-                log_text = self.log.read_text() if self.log.exists() else '(no log file)'
                 _logger.error(
                     f'Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) '
-                    f'below:\n{log_text}'
+                    f'below:\n{self.log.read_text()}'
                 )
                 raise
+            finally:
+                if log_file is not None:
+                    log_file.close()
 
         deadline = time.monotonic() + _START_TIMEOUT_SECS
         while True:
@@ -357,7 +340,6 @@ class PostgresServer:
 
             assert self.cleanup_mode == 'delete'
             shutil.rmtree(str(self.pgdata))
-            self.log.unlink(missing_ok=True)
             atexit.unregister(self._cleanup)
 
     def psql(self, command: str) -> str:
@@ -392,8 +374,7 @@ def get_server(
     """Returns handle to postgresql server instance for the given pgdata directory.
     Args:
         pgdata: pddata directory. If the pgdata directory does not exist, it will be created, but its
-        parent must exists and be a valid directory. The server log is written beside it, as <pgdata>.log, so
-        the parent must also be writable by the server's user.
+        parent must exists and be a valid directory.
         cleanup_mode: If 'stop', the server will be stopped when the last handle is closed (default)
                         If 'delete', the server will be stopped and the pgdata directory will be deleted.
                         If None, the server will not be stopped or deleted.

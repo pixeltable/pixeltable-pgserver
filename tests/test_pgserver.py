@@ -134,8 +134,6 @@ def test_get_server() -> None:
             # check case when initializing the pgdata dir
             with get_server(tmpdir) as pg:
                 pid = _check_server(pg)
-                assert pg.log.parent == pg.pgdata.parent
-                assert pg.log.exists()
 
             assert not process_is_running(pid)
             assert pg.pgdata.exists()
@@ -379,7 +377,7 @@ def test_truncated_postmaster_pid(num_lines: int) -> None:
 
 def test_restart_after_crash() -> None:
     """Kills the server without warning, as a crash or a container teardown does. The next start runs crash recovery,
-    which must finish in time; on Windows it used to stall on the server log while that lived inside pgdata.
+    which fsyncs every file in pgdata, the server log included.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -398,6 +396,8 @@ def test_restart_after_crash() -> None:
 
             with get_server(tmpdir) as pg:
                 pid2 = _check_server(pg)
+                # on Windows, recovery retries a log it cannot open for 30s
+                assert 'sharing violation' not in pg.log.read_text()
         finally:
             _kill_server(pid)
             _kill_server(pid2)
@@ -412,7 +412,6 @@ def test_cleanup_delete() -> None:
 
             assert not process_is_running(pid)
             assert not pg.pgdata.exists()
-            assert not pg.log.exists()
         finally:
             _kill_server(pid)
 
