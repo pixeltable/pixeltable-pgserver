@@ -24,6 +24,7 @@ from .utils import (
     TARGET_POSTGRES_VERSION,
     DiskList,
     PostmasterInfo,
+    cmdline_names_data_dir,
     find_suitable_port,
     find_suitable_socket_dir,
 )
@@ -36,6 +37,8 @@ _logger = logging.getLogger('pixeltable_pgserver')
 # Windows process creation flags
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 CREATE_NO_WINDOW = 0x08000000
+
+_START_TIMEOUT_SECS = 60
 
 
 class PostgresServer:
@@ -178,9 +181,10 @@ class PostgresServer:
             _logger.info(f'no PG_VERSION file found within {self.pgdata}. Initializing pgdata')
             for proc in psutil.process_iter(attrs=('name', 'cmdline')):
                 if (
-                    proc.info['name'] in POSTGRES_PROCESS_NAMES
+                    proc.info['name'] is not None
+                    and proc.info['name'].lower() in POSTGRES_PROCESS_NAMES
                     and proc.info['cmdline'] is not None
-                    and str(self.pgdata) in proc.info['cmdline']
+                    and cmdline_names_data_dir(proc.info['cmdline'], self.pgdata)
                 ):
                     _logger.info(
                         f'Found a running postgres server with same `pgdata` dir: '
@@ -240,16 +244,20 @@ class PostgresServer:
         """
 
         postmaster_info = PostmasterInfo.read_from_pgdata(self.pgdata)
-        if postmaster_info is not None and postmaster_info.is_running():
-            _logger.info(f'a postgres server is already running: {postmaster_info=} {postmaster_info.process=}')
+        running = postmaster_info if postmaster_info is not None and postmaster_info.is_running() else None
+        if running is not None:
+            _logger.info(f'a postgres server is already running: {running=} {running.process=}')
         else:
-            if postmaster_info is not None:
-                _logger.info(f'found a postmaster.pid file, but the server is not running: {postmaster_info=}')
-                # On Linux and macOS, postgres refuses to start while the pid in a stale postmaster.pid belongs to a
-                # live process owned by the same user, and on every OS it refuses an empty or garbled postmaster.pid
-                (self.pgdata / 'postmaster.pid').unlink(missing_ok=True)
-            else:
+            if postmaster_info is None:
                 _logger.info(f'no postmaster.pid file found in {self.pgdata}')
+            else:
+                _logger.info(f'found a postmaster.pid file, but the server is not running: {postmaster_info=}')
+                if postmaster_info.pid is None or postmaster_info.pid_reused:
+                    # Postgres can't recover from these itself: it refuses an empty or garbled postmaster.pid, and on
+                    # Linux and macOS one whose pid belongs to a live process of the same user. Any other stale
+                    # postmaster.pid stays for postgres to judge, since a live server shuts down within a minute of
+                    # losing its lock file.
+                    (self.pgdata / 'postmaster.pid').unlink(missing_ok=True)
 
             postgres_args: str
             subprocess_kwargs: dict[str, Any]
@@ -289,7 +297,7 @@ class PostgresServer:
                     pg_ctl_args,
                     bin_path=self.bin_path,
                     user=self.system_user,
-                    timeout=60,
+                    timeout=_START_TIMEOUT_SECS,
                     **subprocess_kwargs,
                 )
 
@@ -301,18 +309,24 @@ class PostgresServer:
                 )
                 raise
 
+        deadline = time.monotonic() + _START_TIMEOUT_SECS
         while True:
             # in Windows, when there is a postmaster.pid,  init_ctl seems to return
             # but the file is not immediately updated, here we wait until the file shows
             # a new running server. see test_stale_postmaster
             # A server that was already running may still be in crash recovery, for instance after an earlier start
-            # timed out, so wait for it to be ready as well.
+            # timed out, so the wait covers it too: bounded, because every pgserver process on the machine waits on the
+            # lock held here.
             _logger.info('Waiting for postmaster info to show a running process.')
             pinfo = PostmasterInfo.read_from_pgdata(self.pgdata)
             _logger.info(f'Running; checking if ready {pinfo=}')
             if pinfo is not None and pinfo.is_running() and pinfo.status == 'ready':
                 self._postmaster_info = pinfo
                 break
+            if running is not None and not running.is_running():
+                raise RuntimeError(f'Postgres server (pid {running.pid}) exited before it was ready; see {self.log}')
+            if time.monotonic() > deadline:
+                raise RuntimeError(f'Postgres server not ready after {_START_TIMEOUT_SECS}s ({pinfo}); see {self.log}')
 
             _logger.info('Not ready yet; waiting a bit longer.')
             time.sleep(1.0)

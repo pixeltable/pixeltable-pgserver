@@ -17,7 +17,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy_utils import create_database, database_exists
 
-from pixeltable_pgserver import PostgresServer, get_server
+from pixeltable_pgserver import PostgresServer, get_server, postgres_server
 from pixeltable_pgserver.pgexec import pgexec
 from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, process_is_running
 
@@ -309,6 +309,47 @@ def test_stale_postmaster_pid_of_other_server() -> None:
             _kill_server(pid)
             _kill_server(pid2)
             _kill_server(other_pid)
+
+
+def test_uninspectable_server_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A running server whose command line can't be inspected is still taken as this server, and its
+    postmaster.pid stays: postgres shuts down a server whose lock file is gone.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+
+            def access_denied(self: psutil.Process) -> list[str]:
+                raise psutil.AccessDenied(self.pid)
+
+            monkeypatch.setattr(psutil.Process, 'cmdline', access_denied)
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                assert _check_server(pg) == pid
+        finally:
+            _kill_server(pid)
+
+
+def test_wait_for_ready_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A running server that never becomes ready fails the start instead of blocking it, and every other
+    pgserver process waiting on the lock, forever.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[7] = 'starting'
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            monkeypatch.setattr(postgres_server, '_START_TIMEOUT_SECS', 2)
+            with pytest.raises(RuntimeError, match='not ready'):
+                get_server(tmpdir, cleanup_mode=None)
+        finally:
+            _kill_server(pid)
 
 
 @pytest.mark.parametrize('num_lines', [0, 3])

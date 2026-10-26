@@ -32,13 +32,16 @@ _logger = logging.getLogger('pixeltable_pgserver')
 POSTGRES_PROCESS_NAMES = ('postgres', 'postgres.exe')
 
 
-def _data_dir_arg(cmdline: list[str]) -> Path | None:
-    """Returns the data directory that a postgres command line passes with -D, if any."""
-    for i, arg in enumerate(cmdline[:-1]):
-        if arg == '-D':
-            # A Path, so that separators and (on Windows) case compare equal to the path in postmaster.pid
-            return Path(cmdline[i + 1])
-    return None
+def cmdline_names_data_dir(cmdline: list[str], pgdata: Path) -> bool | None:
+    """Whether the -D of a postgres command line is pgdata; None if it has no -D or the two can't be compared."""
+    data_dir = next((Path(cmdline[i + 1]) for i, arg in enumerate(cmdline[:-1]) if arg == '-D'), None)
+    if data_dir is None or not data_dir.is_absolute():
+        return None
+    try:
+        # The same directory, however it is spelled: pg_ctl rewrites -D with forward slashes on Windows
+        return os.path.samefile(data_dir, pgdata)
+    except OSError:
+        return None
 
 
 class PostmasterInfo:
@@ -66,8 +69,10 @@ class PostmasterInfo:
     shmem_info: str
     status: str
     process: psutil.Process | None
+    pid_reused: bool  # the pid belongs to a live process that is certainly not this server's postmaster
 
-    def __init__(self, lines: list[str]) -> None:
+    def __init__(self, lines: list[str], data_dir: Path) -> None:
+        """data_dir: the data directory that holds this postmaster.pid"""
         line_vars = ('pid', 'pgdata', 'start_time', 'port', 'socket_dir', 'hostname', 'shared_memory_info', 'status')
         # Postgres writes postmaster.pid a few lines at a time during startup, so a crash can leave it truncated
         lines = [*lines, *([''] * (len(line_vars) - len(lines)))]
@@ -99,22 +104,35 @@ class PostmasterInfo:
         self.status = raw['status']
 
         self.process = None  # will be not None if process is running
-        self._init_process_meta()
+        self.pid_reused = False
+        self._init_process_meta(data_dir)
 
-    def _init_process_meta(self) -> None:
+    def _init_process_meta(self, data_dir: Path) -> None:
         if self.pid is None:
             return
         try:
             process = psutil.Process(self.pid)
-            # After a crash, the pid in a stale postmaster.pid can belong to another process: Windows reuses pids
-            # quickly, and pids start over in a restarted container. Our postmaster is a postgres process started with
-            # -D <pgdata>, an argument that it keeps on its command line (its children replace theirs). This is more
-            # reliable than the start time, which psutil derives on Linux from a boot time that shifts when the clock
-            # is stepped. A process we may not inspect is not ours; postgres also treats it as stale.
-            if process.name().lower() in POSTGRES_PROCESS_NAMES and _data_dir_arg(process.cmdline()) == self.pgdata:
-                self.process = process
-        except psutil.Error:
-            pass
+        except psutil.NoSuchProcess:
+            return
+        # After a crash, the pid in a stale postmaster.pid can belong to another process: Windows reuses pids quickly,
+        # and pids start over in a restarted container. This server's postmaster is a postgres process whose -D (kept
+        # on its command line, unlike its children's) names this data directory. A pid counts as reused only for a
+        # process that is certainly something else; when that can't be told, for instance for a process we may not
+        # inspect, assume this server, as before. (Not the start time: on Linux, psutil derives it from a boot time
+        # that shifts with clock steps.)
+        try:
+            is_this_server = (
+                process.name().lower() in POSTGRES_PROCESS_NAMES
+                and cmdline_names_data_dir(process.cmdline(), data_dir) is not False
+            )
+        except psutil.NoSuchProcess:
+            return
+        except psutil.AccessDenied:
+            is_this_server = True
+        if is_this_server:
+            self.process = process
+        else:
+            self.pid_reused = True
 
     def is_running(self) -> bool:
         return self.process is not None and self.process.is_running()
@@ -126,7 +144,7 @@ class PostmasterInfo:
             return None
 
         lines = postmaster_file.read_text().splitlines()
-        return cls(lines)
+        return cls(lines, pgdata)
 
     def get_uri(self, user: str = 'postgres', database: str | None = None, driver: str | None = None) -> str:
         """Returns a connection uri string for the postgresql server using the information in postmaster.pid"""
