@@ -329,9 +329,29 @@ def test_uninspectable_server_kept(monkeypatch: pytest.MonkeyPatch) -> None:
             _kill_server(pid)
 
 
+def test_signed_pid_kept() -> None:
+    """A standalone backend (single-user mode, or initdb's bootstrap) records its pid negated in postmaster.pid. Such a
+    lock file is as valid as the postmaster's and stays.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = f'-{pid}'
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                assert _check_server(pg) == pid
+        finally:
+            _kill_server(pid)
+
+
 def test_wait_for_ready_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """A running server that never becomes ready fails the start instead of blocking it, and every other
-    pgserver process waiting on the lock, forever.
+    pgserver process waiting on the lock, forever. A later start succeeds once the server is ready.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -346,6 +366,11 @@ def test_wait_for_ready_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
             monkeypatch.setattr(postgres_server, '_START_TIMEOUT_SECS', 2)
             with pytest.raises(RuntimeError, match='not ready'):
                 get_server(tmpdir, cleanup_mode=None)
+
+            lines[7] = 'ready'
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                assert _check_server(pg) == pid
         finally:
             _kill_server(pid)
 

@@ -80,7 +80,9 @@ class PostmasterInfo:
 
         raw: dict[str, str] = dict(zip(line_vars, clean_lines))
 
-        self.pid = int(raw['pid']) if raw['pid'].isdigit() else None
+        # A standalone backend (single-user mode, or initdb's bootstrap) records its pid negated
+        pid = raw['pid'].removeprefix('-')
+        self.pid = int(pid) if pid.isdigit() else None
         self.pgdata = Path(raw['pgdata'])
         self.start_time = datetime.fromtimestamp(int(raw['start_time'])) if raw['start_time'].isdigit() else None
 

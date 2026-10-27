@@ -89,12 +89,13 @@ class PostgresServer:
         self._count = 0
 
     def start(self) -> None:
-        atexit.register(self._cleanup)
         with self._lock:
-            self._instances[self.pgdata] = self
             self.ensure_pgdata_inited()
             self.ensure_postgres_running()
             self.global_process_id_list.get_and_add(os.getpid())
+            # Only once started, so that get_server() retries a failed start
+            self._instances[self.pgdata] = self
+        atexit.register(self._cleanup)
 
     def stop(self) -> None:
         with self._lock:
