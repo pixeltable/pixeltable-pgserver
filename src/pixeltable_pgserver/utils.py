@@ -32,16 +32,16 @@ _logger = logging.getLogger('pixeltable_pgserver')
 POSTGRES_PROCESS_NAMES = ('postgres', 'postgres.exe')
 
 
-def cmdline_names_data_dir(cmdline: list[str], pgdata: Path) -> bool | None:
-    """Whether the -D of a postgres command line is pgdata; None if it has no -D or the two can't be compared."""
+def cmdline_names_data_dir(cmdline: list[str], pgdata: Path) -> bool:
+    """Whether the -D of a postgres command line is pgdata; False if it has no -D or the two can't be compared."""
     data_dir = next((Path(cmdline[i + 1]) for i, arg in enumerate(cmdline[:-1]) if arg == '-D'), None)
     if data_dir is None or not data_dir.is_absolute():
-        return None
+        return False
     try:
         # The same directory, however it is spelled: pg_ctl rewrites -D with forward slashes on Windows
         return os.path.samefile(data_dir, pgdata)
     except OSError:
-        return None
+        return False
 
 
 class PostmasterInfo:
@@ -69,7 +69,7 @@ class PostmasterInfo:
     shmem_info: str
     status: str
     process: psutil.Process | None
-    pid_reused: bool  # the pid belongs to a live process that is certainly not this server's postmaster
+    pid_held_by_other: bool  # a process other than this server's running postmaster, maybe a zombie, holds the pid
 
     def __init__(self, lines: list[str], data_dir: Path) -> None:
         """data_dir: the data directory that holds this postmaster.pid"""
@@ -106,7 +106,7 @@ class PostmasterInfo:
         self.status = raw['status']
 
         self.process = None  # will be not None if process is running
-        self.pid_reused = False
+        self.pid_held_by_other = False
         self._init_process_meta(data_dir)
 
     def _init_process_meta(self, data_dir: Path) -> None:
@@ -117,15 +117,16 @@ class PostmasterInfo:
         except psutil.NoSuchProcess:
             return
         # After a crash, the pid in a stale postmaster.pid can belong to another process: Windows reuses pids quickly,
-        # and pids start over in a restarted container. This server's postmaster is a postgres process whose -D (kept
-        # on its command line, unlike its children's) names this data directory. A pid counts as reused only for a
-        # process that is certainly something else; when that can't be told, for instance for a process we may not
-        # inspect, assume this server, as before. (Not the start time: on Linux, psutil derives it from a boot time
-        # that shifts with clock steps.)
+        # and pids start over in a restarted container. Or to a zombie: the crashed postmaster itself, when nothing
+        # reaps it, as when Python runs as a container's pid 1. This server's postmaster is a postgres process, not a
+        # zombie, whose -D (kept on its command line, unlike its children's) names this data directory. Only a process
+        # we may not inspect is assumed to be this server, as before. (Not the start time: on Linux, psutil derives it
+        # from a boot time that shifts with clock steps.)
         try:
             is_this_server = (
-                process.name().lower() in POSTGRES_PROCESS_NAMES
-                and cmdline_names_data_dir(process.cmdline(), data_dir) is not False
+                process.status() != psutil.STATUS_ZOMBIE
+                and process.name().lower() in POSTGRES_PROCESS_NAMES
+                and cmdline_names_data_dir(process.cmdline(), data_dir)
             )
         except psutil.NoSuchProcess:
             return
@@ -134,7 +135,7 @@ class PostmasterInfo:
         if is_this_server:
             self.process = process
         else:
-            self.pid_reused = True
+            self.pid_held_by_other = True
 
     def is_running(self) -> bool:
         return self.process is not None and self.process.is_running()

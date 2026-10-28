@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from contextlib import suppress
 from multiprocessing import queues
 from pathlib import Path
@@ -19,7 +20,7 @@ from sqlalchemy_utils import create_database, database_exists
 
 from pixeltable_pgserver import PostgresServer, get_server, postgres_server
 from pixeltable_pgserver.pgexec import pgexec
-from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, process_is_running
+from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, find_suitable_socket_dir, process_is_running
 
 
 def _check_sqlalchemy_works(srv: PostgresServer, driver: str | None = None) -> None:
@@ -307,6 +308,94 @@ def test_stale_postmaster_pid_of_other_server() -> None:
             _kill_server(pid)
             _kill_server(pid2)
             _kill_server(other_pid)
+
+
+def _start_postmaster(pg: PostgresServer, *, data_dir_arg: bool = True) -> subprocess.Popen[bytes]:
+    """Starts pg's server as a child of this process, without pg_ctl, and waits until it is ready."""
+    socket_dir = find_suitable_socket_dir(pg.pgdata, PostgresServer.runtime_path)
+    args = [str(pg.bin_path / 'postgres'), '-h', '', '-k', str(socket_dir)]
+    if data_dir_arg:
+        args += ['-D', str(pg.pgdata)]
+    proc = subprocess.Popen(
+        args, env={**os.environ, 'PGDATA': str(pg.pgdata)}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    deadline = time.monotonic() + 30
+    while True:
+        info = PostmasterInfo.read_from_pgdata(pg.pgdata)
+        if info is not None and info.pid == proc.pid and info.status == 'ready':
+            return proc
+        assert proc.poll() is None and time.monotonic() < deadline
+        time.sleep(0.1)
+
+
+@pytest.mark.skipif(platform.system() == 'Windows', reason='postgres refuses to run as an administrator, as on CI')
+def test_stale_postmaster_pid_of_server_without_data_dir_arg() -> None:
+    """The pid in a stale postmaster.pid can belong to another cluster's postgres that has no -D on its command line,
+    as when started with PGDATA alone, as the official Docker image does. That is not this server either.
+    """
+    if os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as other_tmpdir:
+        pid = None
+        pid2 = None
+        other = None
+        try:
+            with get_server(other_tmpdir, cleanup_mode='stop') as other_pg:
+                pass
+            other = _start_postmaster(other_pg, data_dir_arg=False)
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = str(other.pid)
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+            assert other.poll() is None
+        finally:
+            if other is not None:
+                other.kill()
+                other.wait()
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
+@pytest.mark.skipif(platform.system() == 'Windows', reason='Windows has no zombie processes')
+def test_zombie_postmaster() -> None:
+    """A crashed postmaster stays a zombie while nothing reaps it, as when Python runs as a container's pid 1, and
+    postgres refuses to start while the zombie holds the pid in postmaster.pid. The server must still start.
+    """
+    if os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid2 = None
+        postmaster = None
+        try:
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                _check_server(pg)
+            postmaster = _start_postmaster(pg)
+            children = psutil.Process(postmaster.pid).children(recursive=True)
+            postmaster.kill()
+            for child in children:
+                with suppress(psutil.NoSuchProcess):
+                    child.kill()
+            psutil.wait_procs(children, timeout=30)
+            # not postmaster.wait(), which would reap it
+            deadline = time.monotonic() + 30
+            while psutil.Process(postmaster.pid).status() != psutil.STATUS_ZOMBIE:
+                assert time.monotonic() < deadline
+                time.sleep(0.1)
+
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            if postmaster is not None:
+                postmaster.kill()
+                postmaster.wait()
+            _kill_server(pid2)
 
 
 def test_uninspectable_server_kept(monkeypatch: pytest.MonkeyPatch) -> None:

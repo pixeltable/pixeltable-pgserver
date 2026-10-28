@@ -229,12 +229,14 @@ class PostgresServer:
                 _logger.info(f'no postmaster.pid file found in {self.pgdata}')
             else:
                 _logger.info(f'found a postmaster.pid file, but the server is not running: {postmaster_info=}')
-                if postmaster_info.pid is None or postmaster_info.pid_reused:
+                if postmaster_info.pid is None or postmaster_info.pid_held_by_other:
                     # Postgres can't recover from these itself: it refuses an empty or garbled postmaster.pid, and on
-                    # Linux and macOS one whose pid belongs to a live process of the same user. Any other stale
-                    # postmaster.pid stays for postgres to judge, since a live server shuts down within a minute of
-                    # losing its lock file.
+                    # Linux and macOS a lock file, this or its socket's, whose pid belongs to a process of the same
+                    # user, even a zombie. Any other stale postmaster.pid stays for postgres to judge, since a live
+                    # server shuts down within a minute of losing its lock file.
                     (self.pgdata / 'postmaster.pid').unlink(missing_ok=True)
+                    if postmaster_info.socket_path is not None:
+                        Path(f'{postmaster_info.socket_path}.lock').unlink(missing_ok=True)
 
             postgres_args: str
             subprocess_kwargs: dict[str, Any]
@@ -284,9 +286,10 @@ class PostgresServer:
                 )
 
             except subprocess.SubprocessError:
+                log_text = self.log.read_text() if self.log.exists() else '(no log file)'
                 _logger.error(
                     f'Failed to start server.\nShowing contents of postgres server log ({self.log.absolute()}) '
-                    f'below:\n{self.log.read_text()}'
+                    f'below:\n{log_text}'
                 )
                 raise
             finally:
