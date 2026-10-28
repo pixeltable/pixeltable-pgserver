@@ -3,6 +3,7 @@ import multiprocessing as mp
 import os
 import platform
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -103,7 +104,10 @@ def _kill_server(pid: int | psutil.Process | None) -> None:
             return
 
     if proc.is_running():
-        proc.terminate()  # attempt cleaner shutdown
+        # A fast shutdown (SIGINT) ends open connections, such as those _check_server() leaves in its engines'
+        # pools; a smart one (SIGTERM) waits for them. A server killed instead leaks its SysV shared memory segment,
+        # of which macOS allows only 32 across all test runs. (Windows has neither SIGINT for another process nor SysV.)
+        proc.send_signal(signal.SIGTERM if platform.system() == 'Windows' else signal.SIGINT)
         try:
             proc.wait(3)  # wait at most a few seconds
         except psutil.TimeoutExpired:
@@ -356,7 +360,7 @@ def test_stale_postmaster_pid_of_server_without_data_dir_arg() -> None:
             assert other.poll() is None
         finally:
             if other is not None:
-                other.kill()
+                _kill_server(other.pid)
                 other.wait()
             _kill_server(pid)
             _kill_server(pid2)
@@ -612,8 +616,8 @@ def _reuse_deleted_datadir(prefix: str) -> None:
             queue_from_child: queues.Queue = mp.Queue()
             child = mp.Process(target=_start_server_in_separate_process, args=(pgdata, None, queue_from_child, None))
             child.start()
-            # wait for child to start server
-            curr_pid = queue_from_child.get()
+            # wait for child to start server, but not forever: a failed child puts nothing
+            curr_pid = queue_from_child.get(timeout=120)
             child.join()
             server_proc = psutil.Process(curr_pid)
             assert server_proc.is_running()
@@ -683,8 +687,8 @@ def test_multiprocess_shared() -> None:
                 target=_start_server_in_separate_process, args=(tmpdir, queue_to_child, queue_from_child, 'stop')
             )
             child.start()
-            # wait for child to start server
-            server_pid_child = queue_from_child.get()
+            # wait for child to start server, but not forever: a failed child puts nothing
+            server_pid_child = queue_from_child.get(timeout=120)
 
             with get_server(tmpdir) as pg:
                 server_pid_parent = _check_server(pg)
