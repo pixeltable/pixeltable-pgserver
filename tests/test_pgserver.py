@@ -3,9 +3,13 @@ import multiprocessing as mp
 import os
 import platform
 import shutil
+import signal
 import socket
 import subprocess
+import sys
 import tempfile
+import time
+from contextlib import suppress
 from multiprocessing import queues
 from pathlib import Path
 from typing import Iterator
@@ -15,9 +19,9 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy_utils import create_database, database_exists
 
-from pixeltable_pgserver import PostgresServer, get_server
+from pixeltable_pgserver import PostgresServer, get_server, postgres_server
 from pixeltable_pgserver.pgexec import pgexec
-from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, process_is_running
+from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, find_suitable_socket_dir, process_is_running
 
 
 def _check_sqlalchemy_works(srv: PostgresServer, driver: str | None = None) -> None:
@@ -100,7 +104,10 @@ def _kill_server(pid: int | psutil.Process | None) -> None:
             return
 
     if proc.is_running():
-        proc.terminate()  # attempt cleaner shutdown
+        # A fast shutdown (SIGINT) ends open connections, such as those _check_server() leaves in its engines'
+        # pools; a smart one (SIGTERM) waits for them. A server killed instead leaks its SysV shared memory segment,
+        # of which macOS allows only 32 across all test runs. (Windows has neither SIGINT for another process nor SysV.)
+        proc.send_signal(signal.SIGTERM if platform.system() == 'Windows' else signal.SIGINT)
         try:
             proc.wait(3)  # wait at most a few seconds
         except psutil.TimeoutExpired:
@@ -252,6 +259,268 @@ def test_stale_postmaster() -> None:
             _kill_server(pid2)
 
 
+def test_stale_postmaster_reused_pid() -> None:
+    """After a crash, the pid in a stale postmaster.pid can belong to an unrelated live process: Windows reuses pids
+    quickly, and pids start over in a restarted container. The server must still start.
+    """
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        unrelated = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(300)'])
+        try:
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = str(unrelated.pid)
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            unrelated.kill()
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
+def test_stale_postmaster_pid_of_other_server() -> None:
+    """The pid in a stale postmaster.pid can also belong to another cluster's postgres, which must be left alone."""
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as other_tmpdir:
+        pid = None
+        pid2 = None
+        other_pid = None
+        try:
+            with get_server(other_tmpdir, cleanup_mode=None) as other:
+                other_pid = _check_server(other)
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = str(other_pid)
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+            assert process_is_running(other_pid)
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+            _kill_server(other_pid)
+
+
+def _start_postmaster(pg: PostgresServer, *, data_dir_arg: bool = True) -> subprocess.Popen[bytes]:
+    """Starts pg's server as a child of this process, without pg_ctl, and waits until it is ready."""
+    socket_dir = find_suitable_socket_dir(pg.pgdata, PostgresServer.runtime_path)
+    args = [str(pg.bin_path / 'postgres'), '-h', '', '-k', str(socket_dir)]
+    if data_dir_arg:
+        args += ['-D', str(pg.pgdata)]
+    proc = subprocess.Popen(
+        args, env={**os.environ, 'PGDATA': str(pg.pgdata)}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    deadline = time.monotonic() + 30
+    while True:
+        info = PostmasterInfo.read_from_pgdata(pg.pgdata)
+        if info is not None and info.pid == proc.pid and info.status == 'ready':
+            return proc
+        assert proc.poll() is None and time.monotonic() < deadline
+        time.sleep(0.1)
+
+
+@pytest.mark.skipif(platform.system() == 'Windows', reason='postgres refuses to run as an administrator, as on CI')
+def test_stale_postmaster_pid_of_server_without_data_dir_arg() -> None:
+    """The pid in a stale postmaster.pid can belong to another cluster's postgres that has no -D on its command line,
+    as when started with PGDATA alone, as the official Docker image does. That is not this server either.
+    """
+    if os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as other_tmpdir:
+        pid = None
+        pid2 = None
+        other = None
+        try:
+            with get_server(other_tmpdir, cleanup_mode='stop') as other_pg:
+                pass
+            other = _start_postmaster(other_pg, data_dir_arg=False)
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = str(other.pid)
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+            assert other.poll() is None
+        finally:
+            if other is not None:
+                _kill_server(other.pid)
+                other.wait()
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
+@pytest.mark.skipif(platform.system() == 'Windows', reason='Windows has no zombie processes')
+def test_zombie_postmaster() -> None:
+    """A crashed postmaster stays a zombie while nothing reaps it, as when Python runs as a container's pid 1, and
+    postgres refuses to start while the zombie holds the pid in postmaster.pid. The server must still start.
+    """
+    if os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid2 = None
+        postmaster = None
+        try:
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                _check_server(pg)
+            postmaster = _start_postmaster(pg)
+            children = psutil.Process(postmaster.pid).children(recursive=True)
+            postmaster.kill()
+            for child in children:
+                with suppress(psutil.NoSuchProcess):
+                    child.kill()
+            psutil.wait_procs(children, timeout=30)
+            # not postmaster.wait(), which would reap it
+            deadline = time.monotonic() + 30
+            while psutil.Process(postmaster.pid).status() != psutil.STATUS_ZOMBIE:
+                assert time.monotonic() < deadline
+                time.sleep(0.1)
+
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            if postmaster is not None:
+                postmaster.kill()
+                postmaster.wait()
+            _kill_server(pid2)
+
+
+def test_uninspectable_server_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A running server whose command line can't be inspected is still taken as this server, and its
+    postmaster.pid stays: postgres shuts down a server whose lock file is gone.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+
+            def access_denied(self: psutil.Process) -> list[str]:
+                raise psutil.AccessDenied(self.pid)
+
+            monkeypatch.setattr(psutil.Process, 'cmdline', access_denied)
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                assert _check_server(pg) == pid
+        finally:
+            _kill_server(pid)
+
+
+def test_signed_pid_kept() -> None:
+    """A standalone backend (single-user mode, or initdb's bootstrap) records its pid negated in postmaster.pid. Such a
+    lock file is as valid as the postmaster's and stays.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[0] = f'-{pid}'
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                assert _check_server(pg) == pid
+        finally:
+            _kill_server(pid)
+
+
+def test_wait_for_ready_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A running server that never becomes ready fails the start instead of blocking it, and every other
+    pgserver process waiting on the lock, forever. A later start succeeds once the server is ready.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            lines[7] = 'starting'
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            monkeypatch.setattr(postgres_server, '_START_TIMEOUT_SECS', 2)
+            with pytest.raises(RuntimeError, match='not ready'):
+                get_server(tmpdir, cleanup_mode=None)
+
+            lines[7] = 'ready'
+            postmaster_pid.write_text('\n'.join(lines) + '\n')
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                assert _check_server(pg) == pid
+        finally:
+            _kill_server(pid)
+
+
+@pytest.mark.parametrize('num_lines', [0, 3])
+def test_truncated_postmaster_pid(num_lines: int) -> None:
+    """Postgres writes postmaster.pid a few lines at a time during startup, so a crash during startup can leave it
+    empty or truncated. The server must still start.
+    """
+    if platform.system() != 'Windows' and os.geteuid() == 0:
+        pytest.skip('This test is not run as root on Linux.')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        try:
+            with get_server(tmpdir, cleanup_mode='stop') as pg:
+                pid = _check_server(pg)
+                postmaster_pid = pg.pgdata / 'postmaster.pid'
+                lines = postmaster_pid.read_text().splitlines()
+
+            postmaster_pid.write_text(''.join(f'{line}\n' for line in lines[:num_lines]))
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
+def test_restart_after_crash() -> None:
+    """Kills the server without warning, as a crash or a container teardown does. The next start runs crash recovery,
+    which fsyncs every file in pgdata, the server log included.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pid = None
+        pid2 = None
+        try:
+            with get_server(tmpdir, cleanup_mode=None) as pg:
+                pid = _check_server(pg)
+
+            postmaster = psutil.Process(pid)
+            procs = [postmaster, *postmaster.children(recursive=True)]
+            for proc in procs:
+                # once the postmaster is gone, its children may exit before they are killed
+                with suppress(psutil.NoSuchProcess):
+                    proc.kill()
+            psutil.wait_procs(procs, timeout=30)
+
+            with get_server(tmpdir) as pg:
+                pid2 = _check_server(pg)
+                # on Windows, recovery retries a log it cannot open for 30s
+                assert 'sharing violation' not in pg.log.read_text()
+        finally:
+            _kill_server(pid)
+            _kill_server(pid2)
+
+
 def test_cleanup_delete() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         pid = None
@@ -347,8 +616,8 @@ def _reuse_deleted_datadir(prefix: str) -> None:
             queue_from_child: queues.Queue = mp.Queue()
             child = mp.Process(target=_start_server_in_separate_process, args=(pgdata, None, queue_from_child, None))
             child.start()
-            # wait for child to start server
-            curr_pid = queue_from_child.get()
+            # wait for child to start server, but not forever: a failed child puts nothing
+            curr_pid = queue_from_child.get(timeout=120)
             child.join()
             server_proc = psutil.Process(curr_pid)
             assert server_proc.is_running()
@@ -418,8 +687,8 @@ def test_multiprocess_shared() -> None:
                 target=_start_server_in_separate_process, args=(tmpdir, queue_to_child, queue_from_child, 'stop')
             )
             child.start()
-            # wait for child to start server
-            server_pid_child = queue_from_child.get()
+            # wait for child to start server, but not forever: a failed child puts nothing
+            server_pid_child = queue_from_child.get(timeout=120)
 
             with get_server(tmpdir) as pg:
                 server_pid_parent = _check_server(pg)
