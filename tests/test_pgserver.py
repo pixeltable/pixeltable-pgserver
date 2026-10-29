@@ -547,6 +547,19 @@ def test_cleanup_none() -> None:
             _kill_server(pid)
 
 
+def test_upgrade_db_rejects_downgrade(monkeypatch: pytest.MonkeyPatch) -> None:
+    """upgrade_db() refuses a pgdata of a later version before it stops its server or creates anything."""
+    monkeypatch.setattr(postgres_server, 'TARGET_POSTGRES_VERSION', 16)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pgdata = Path(tmpdir) / 'pgdata'
+        with get_server(pgdata, postgres_version=18) as pg:
+            with pytest.raises(RuntimeError, match='Cannot downgrade'):
+                postgres_server.upgrade_db(pgdata)
+            info = PostmasterInfo.read_from_pgdata(pg.pgdata)
+            assert info is not None and info.is_running()
+            assert list(Path(tmpdir).iterdir()) == [pgdata]
+
+
 @pytest.fixture
 def tmp_postgres() -> Iterator[PostgresServer]:
     tmp_pg_data = tempfile.mkdtemp()

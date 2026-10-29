@@ -425,7 +425,7 @@ def pgdata_version(pgdata: Path | str) -> int | None:
 
 
 def upgrade_db(pgdata: Path | str) -> None:
-    """Upgrades the given pgdata directory to the latest version of postgres."""
+    """Upgrades the given pgdata directory to TARGET_POSTGRES_VERSION. A pgdata of a later version is an error."""
     if isinstance(pgdata, str):
         pgdata = Path(pgdata)
     pgdata = pgdata.expanduser().resolve()
@@ -435,6 +435,11 @@ def upgrade_db(pgdata: Path | str) -> None:
     if current_version is None or current_version == target_version:
         # Nothing to do
         return
+    if current_version > target_version:
+        raise RuntimeError(
+            f'Cannot downgrade pgdata from version {current_version} to {target_version}: {pgdata}. '
+            f'Set PGSERVER_POSTGRES_VERSION={current_version} to use it.'
+        )
 
     assert current_version in POSTGRES_VERSIONS, (
         'Unexpectedly encountered a pgdata folder with a version of postgres that was never supported.'
