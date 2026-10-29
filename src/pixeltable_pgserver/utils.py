@@ -20,7 +20,7 @@ POSTGRES_VERSIONS = {
     16: Path(__file__).parent / 'pginstall' / 'bin',
     18: Path(__file__).parent / 'pginstall18' / 'bin',
 }
-TARGET_POSTGRES_VERSION = int(os.environ.get('PGSERVER_POSTGRES_VERSION', '18'))
+TARGET_POSTGRES_VERSION = int(os.environ.get('PGSERVER_POSTGRES_VERSION', '16'))
 
 if TARGET_POSTGRES_VERSION not in POSTGRES_VERSIONS:
     raise RuntimeError(
