@@ -47,7 +47,7 @@ def imported_dlls(path: Path) -> list[str]:
 
 
 def provided_by_windows(name: str) -> bool:
-    system32 = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32'
+    system32 = Path(os.environ.get('SYSTEMROOT', r'C:\Windows')) / 'System32'
     return name.lower().startswith(('api-ms-win-', 'ext-ms-win-')) or (system32 / name).is_file()
 
 
