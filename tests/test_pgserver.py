@@ -21,7 +21,13 @@ from sqlalchemy_utils import create_database, database_exists
 
 from pixeltable_pgserver import PostgresServer, get_server, postgres_server
 from pixeltable_pgserver.pgexec import pgexec
-from pixeltable_pgserver.utils import PostmasterInfo, find_suitable_port, find_suitable_socket_dir, process_is_running
+from pixeltable_pgserver.utils import (
+    POSTGRES_VERSIONS,
+    PostmasterInfo,
+    find_suitable_port,
+    find_suitable_socket_dir,
+    process_is_running,
+)
 
 
 def _check_sqlalchemy_works(srv: PostgresServer, driver: str | None = None) -> None:
@@ -717,3 +723,17 @@ def test_multiprocess_shared() -> None:
             assert not process_is_running(server_pid_parent)
     finally:
         _kill_server(pid)
+
+
+@pytest.mark.skipif(platform.system() != 'Windows', reason='checks which DLLs the Windows binaries load')
+@pytest.mark.parametrize('version', sorted(POSTGRES_VERSIONS))
+def test_binaries_run_without_the_toolchain_on_path(version: int) -> None:
+    # The wheel must carry every DLL its binaries import that Windows itself does not provide (MinGW-w64's
+    # libwinpthread-1.dll for PostgreSQL 18's postgres.exe); without it they exit with STATUS_DLL_NOT_FOUND
+    # (0xC0000135) on a machine that has no MinGW-w64 on PATH.
+    system_root = os.environ.get('SYSTEMROOT', r'C:\Windows')
+    env = {**os.environ, 'PATH': os.pathsep.join([str(Path(system_root) / 'System32'), system_root])}
+    for exe in ('postgres.exe', 'pg_ctl.exe', 'initdb.exe'):
+        binary = POSTGRES_VERSIONS[version] / exe
+        result = subprocess.run([str(binary), '--version'], check=False, env=env, capture_output=True)
+        assert result.returncode == 0, f'{exe} of PostgreSQL {version} exited with {result.returncode:#x}'
