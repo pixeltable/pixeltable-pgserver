@@ -10,9 +10,14 @@ all: fixup
 # the install tree is relocatable and PG16 + PG18 can coexist in one wheel without a
 # delocate basename collision (e.g. two libpq.5.dylib). No-op off macOS. Runs last, after
 # both postgres and pgvector have installed their libraries into $(INSTALL_PREFIX).
+# On Windows, also copy into bin/ the toolchain DLLs the binaries import (PostgreSQL 18's postgres.exe imports
+# clock_gettime from MinGW-w64's libwinpthread-1.dll), so they run on machines without MinGW-w64 on PATH.
 .PHONY: fixup
 fixup: pgvector postgres
 	bash fixup_macos_rpaths.sh $(INSTALL_PREFIX)
+ifeq ($(OS),Windows_NT)
+	python bundle_windows_dlls.py $(INSTALL_PREFIX)
+endif
 
 ### postgres
 POSTGRES_URL := https://ftp.postgresql.org/pub/source/v$(POSTGRES_VERSION)/postgresql-$(POSTGRES_VERSION).tar.gz
